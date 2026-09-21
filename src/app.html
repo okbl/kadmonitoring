@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Обособленный спор — движение оспаривания сделки должника</title>
+<style>
+/* @@FONT@@ */
+/*
+ * Палитра та же, что в анализаторе кредитных отчётов: алебастровый #F1ECE6
+ * и тёплый грейж #DDD5CD — поверхности, угольный #2B2D31 — текст,
+ * терракота #8D321F — акцент, олива #3A4027 — «всё в порядке».
+ * Тема светлая: документ печатают и подшивают к делу.
+ */
+:root{
+  --bg:#F1ECE6;--surface:#FBF9F6;--surface-2:#E7E0D8;--greige:#DDD5CD;
+  --line:#DDD5CD;--line-2:#C6BCB1;
+  --ink:#2B2D31;--ink-2:#5F6165;--ink-3:#8A867F;
+  --acc:#8D321F;--acc-2:#A94229;--acc-wash:#F6E7E2;--acc-line:#E2C6BC;
+  --rose:#7D4047;--olive:#3A4027;--beige:#C29B72;
+  --ok:#3A4027;--ok-wash:#E9EADF;--ok-line:#C7CBB5;
+  --warn:#8A5A16;--warn-wash:#F6EDDF;--warn-line:#E0CCA9;
+  --hero:linear-gradient(135deg,#8D321F 0%,#7D4047 100%);
+  --hero-ok:linear-gradient(135deg,#3A4027 0%,#4E5A33 100%);
+  --hero-neutral:linear-gradient(135deg,#5F6165 0%,#7A766E 100%);
+  --r:16px;--r-sm:10px;
+  --shadow:0 1px 2px rgba(43,45,49,.05),0 10px 24px -18px rgba(43,45,49,.4);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);
+  font-family:Onest,"Segoe UI",system-ui,sans-serif;font-size:15px;line-height:1.45;
+  font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;font-weight:600;letter-spacing:-.02em}
+button{font:inherit}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px;border-radius:4px}
+.page{max-width:1180px;margin:0 auto;padding:0 22px}
+@keyframes pop{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ---------- шапка ---------- */
+.top{background:var(--surface);border-bottom:1px solid var(--line)}
+.top .in{display:flex;align-items:center;gap:12px;padding:12px 0;flex-wrap:wrap}
+.mark{width:26px;height:26px;border-radius:8px;flex:none;background:var(--hero)}
+.top .hd{flex:1 1 auto;min-width:0}
+.ttl{font-weight:600;font-size:15px;letter-spacing:-.015em}
+.who{font-size:12.5px;color:var(--ink-2)}
+.who b{color:var(--ink);font-weight:600}
+.act{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.btn{border:1px solid var(--line-2);background:var(--surface);color:var(--ink-2);border-radius:999px;
+  padding:8px 16px;font-size:13.5px;cursor:pointer;transition:border-color .15s,color .15s,background .15s}
+.btn:hover{border-color:var(--ink-3);color:var(--ink)}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:#FBF9F6;font-weight:600}
+.btn.pri:hover{background:var(--acc-2);border-color:var(--acc-2)}
+.btn-sm{padding:5px 12px;font-size:12.5px}
+.btn[disabled]{opacity:.45;cursor:default}
+.linkbtn{border:0;background:none;color:var(--ink-3);font-size:12px;cursor:pointer;
+  text-decoration:underline;text-underline-offset:2px;padding:0}
+.linkbtn:hover{color:var(--acc)}
+
+/* ---------- ввод ---------- */
+.ask{background:var(--surface);border-bottom:1px solid var(--line)}
+.ask .in{padding:20px 0}
+.ask .line{display:flex;align-items:flex-end;gap:18px;flex-wrap:wrap}
+label.big{display:block;font-size:15px;font-weight:600;letter-spacing:-.01em;margin-bottom:7px}
+label.lb{display:block;font-size:12px;color:var(--ink-3);margin-bottom:4px}
+.datebox{position:relative;display:flex}
+.datebox input{width:190px;border:1.5px solid var(--line-2);background:var(--bg);border-radius:12px;
+  padding:12px 42px 12px 14px;font:inherit;font-size:21px;font-weight:700;letter-spacing:.01em;
+  color:var(--ink);transition:border-color .15s}
+.datebox input:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 4px var(--acc-wash)}
+.datebox input.bad{border-color:var(--acc);background:var(--acc-wash)}
+.datebox input::placeholder{color:var(--ink-3);font-weight:400}
+.datebox .pick{position:absolute;right:3px;top:3px;bottom:3px;width:36px;border:0;background:none;
+  cursor:pointer;color:var(--ink-3);display:flex;align-items:center;justify-content:center;border-radius:0 10px 10px 0}
+.datebox .pick:hover{color:var(--acc);background:var(--surface-2)}
+.datebox .nat{position:absolute;right:8px;bottom:0;width:1px;height:1px;opacity:0;pointer-events:none;border:0;padding:0}
+.grow{flex:1 1 320px;min-width:260px}
+input[type=text],input[type=url],select,textarea{width:100%;border:1px solid var(--line-2);background:var(--surface);
+  border-radius:9px;padding:9px 11px;font:inherit;font-size:13.5px;color:var(--ink)}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-wash)}
+.echo{font-size:12.5px;color:var(--ink-2);margin-top:6px}
+.echo.bad{color:var(--acc)}
+
+.drop{margin-top:16px;border:1.5px dashed var(--line-2);border-radius:var(--r);background:var(--bg);
+  padding:14px 16px;transition:border-color .15s,background .15s}
+.drop.over{border-color:var(--acc);background:var(--acc-wash)}
+.drop textarea{min-height:104px;resize:vertical;font-size:13px;line-height:1.5;background:var(--surface)}
+.drop .row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:10px}
+.hint{font-size:12px;color:var(--ink-3);line-height:1.5;margin:8px 0 0}
+.hint b{color:var(--ink-2);font-weight:600}
+
+.adv{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
+.adv>summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center;gap:8px;
+  font-size:13.5px;color:var(--ink-2);user-select:none}
+.adv>summary::-webkit-details-marker{display:none}
+.adv>summary:hover{color:var(--ink)}
+.caret{width:7px;height:7px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;
+  transform:rotate(45deg);transition:transform .18s;margin-bottom:2px}
+details[open]>summary .caret{transform:rotate(-135deg);margin-bottom:-2px}
+.advbody{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:18px 26px;padding:16px 0 4px}
+
+/* ---------- плитки ---------- */
+.bento{display:grid;grid-template-columns:repeat(12,1fr);gap:12px;padding:20px 0 0;align-items:start}
+.t{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px 20px;
+  display:flex;flex-direction:column;gap:9px;min-width:0;box-shadow:var(--shadow);animation:pop .4s cubic-bezier(.2,.8,.2,1) both}
+.k{font-size:12.5px;color:var(--ink-2);font-weight:500}
+.v{font-size:27px;font-weight:700;letter-spacing:-.03em;line-height:1}
+.m{font-size:12.5px;color:var(--ink-3);line-height:1.45}
+.s4{grid-column:span 4}.s6{grid-column:span 6}.s8{grid-column:span 8}.s12{grid-column:span 12}
+@media (max-width:860px){.s4,.s6,.s8{grid-column:span 12}}
+
+.hero{grid-column:span 8;background:var(--hero);border-color:transparent;color:#F6EFE9;padding:26px 28px;gap:0}
+.hero.ok{background:var(--hero-ok)}
+.hero.neutral{background:var(--hero-neutral)}
+.hero .k{color:#EBD5CC;font-weight:600}
+.hero .big{font-size:40px;font-weight:800;letter-spacing:-.035em;line-height:1.05;margin:12px 0 0;color:#FBF7F2}
+.hero .said{font-size:14.5px;color:#F6EFE9;margin:14px 0 0;line-height:1.5;max-width:56ch}
+.hero .said b{font-weight:700;color:#fff}
+.hero .strip{display:flex;gap:28px;margin-top:20px;padding-top:18px;border-top:1px solid rgba(246,239,233,.28);flex-wrap:wrap}
+.hero .strip div{color:#EBD5CC;font-size:12.5px;font-weight:500}
+.hero .strip b{display:block;color:#FBF7F2;font-size:19px;font-weight:700;letter-spacing:-.02em;margin-bottom:1px}
+.stack{grid-column:span 4;display:flex;flex-direction:column;gap:12px}
+@media (max-width:860px){.hero,.stack{grid-column:span 12}}
+.t.warnT{background:var(--acc-wash);border-color:var(--acc-line)}
+.t.warnT .v{color:var(--acc)}
+.t.okT{background:var(--ok-wash);border-color:var(--ok-line)}
+.t.okT .v{color:var(--ok)}
+
+/* ---------- требования к управляющему ---------- */
+.sec{margin:26px 0 0}
+.sec>h3{font-size:14px;margin-bottom:2px}
+.sec>.m{margin-bottom:12px}
+.task{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--line-2);
+  border-radius:var(--r-sm);padding:13px 16px;margin-bottom:8px}
+.task.due-soon{border-left-color:var(--acc);background:var(--acc-wash);border-color:var(--acc-line)}
+.task.due-late{border-left-color:var(--acc);background:var(--acc-wash);border-color:var(--acc-line)}
+.task.due-ok{border-left-color:var(--olive)}
+.task .head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:5px}
+.task .when{font-size:13.5px;font-weight:700;letter-spacing:-.01em}
+.task .left{font-size:12px;color:var(--ink-2);font-weight:600}
+.task.due-late .left,.task.due-soon .left{color:var(--acc)}
+.task .what{font-size:14px;line-height:1.5}
+.task .foot{margin-top:7px;display:flex;gap:8px;flex-wrap:wrap;font-size:11.5px;color:var(--ink-3)}
+.tag{border:1px solid var(--line-2);border-radius:999px;padding:1px 9px;background:var(--bg)}
+.tag.norm{color:var(--ink-2)}
+.tag.src{color:var(--acc);border-color:var(--acc-line);background:var(--acc-wash)}
+.task blockquote{margin:8px 0 0;padding:7px 11px;border-left:2px solid var(--line-2);background:var(--bg);
+  border-radius:0 6px 6px 0;font-size:12.5px;color:var(--ink-2);line-height:1.5}
+
+/* ---------- таймлайн ---------- */
+.tl{border-top:1px solid var(--line)}
+.ev{border-bottom:1px solid var(--line);padding:0}
+.ev>summary{list-style:none;cursor:pointer;display:flex;align-items:flex-start;gap:14px;padding:13px 4px}
+.ev>summary::-webkit-details-marker{display:none}
+.ev>summary:hover{background:var(--surface)}
+.ev .date{font-size:13px;font-weight:700;width:86px;flex:none;letter-spacing:-.01em}
+.ev .body{flex:1 1 auto;min-width:0}
+.ev .doc{font-size:14px;font-weight:600;letter-spacing:-.01em}
+.ev .sub{font-size:12px;color:var(--ink-3);margin-top:3px;line-height:1.45}
+.ev .badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.b{font-size:11px;border-radius:999px;padding:1px 9px;border:1px solid var(--line-2);color:var(--ink-2);background:var(--bg)}
+.b.stage{border-color:var(--acc-line);background:var(--acc-wash);color:var(--acc);font-weight:600}
+.b.exact{border-color:var(--ok-line);background:var(--ok-wash);color:var(--ok)}
+.b.likely{border-color:var(--warn-line);background:var(--warn-wash);color:var(--warn)}
+.b.root{border-color:var(--ink-3);color:var(--ink);font-weight:600}
+.ev .detail{padding:2px 4px 16px 100px}
+.ev .detail .lbl{font-size:11.5px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em;margin:10px 0 4px}
+.ev .detail p{margin:0;font-size:13px;color:var(--ink-2);line-height:1.5}
+.ev textarea{min-height:92px;font-size:12.5px;line-height:1.5}
+@media (max-width:640px){
+  .ev>summary{flex-wrap:wrap}
+  .ev .date{width:auto}
+  .ev .detail{padding-left:4px}
+}
+
+/* ---------- прочее ---------- */
+.note{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-sm);
+  padding:12px 15px;font-size:13px;color:var(--ink-2);line-height:1.5}
+.note.warn{background:var(--warn-wash);border-color:var(--warn-line);color:#5C3D10}
+.note.acc{background:var(--acc-wash);border-color:var(--acc-line)}
+.maybe-row{display:flex;gap:12px;align-items:flex-start;padding:10px 4px;border-bottom:1px solid var(--line);font-size:13px}
+.maybe-row .date{font-weight:700;width:86px;flex:none;font-size:12.5px}
+.diag{font-size:12px;color:var(--ink-3);line-height:1.6}
+.diag code{background:var(--surface-2);border-radius:4px;padding:1px 5px;font-size:11.5px}
+dialog{border:0;border-radius:var(--r);padding:0;max-width:720px;width:calc(100% - 32px);
+  box-shadow:0 30px 80px -30px rgba(43,45,49,.6);background:var(--surface);color:var(--ink)}
+dialog::backdrop{background:rgba(43,45,49,.42)}
+.modal{padding:24px 28px 28px}
+.modal h2{font-size:19px;margin-bottom:10px}
+.modal h4{font-size:13px;margin:18px 0 5px}
+.modal p,.modal li{font-size:13.5px;color:var(--ink-2);line-height:1.55;margin:0 0 8px}
+.modal ul{margin:0 0 8px;padding-left:20px}
+.modal .close{position:sticky;bottom:0;padding-top:14px;text-align:right;background:var(--surface)}
+#toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:var(--ink);color:var(--bg);
+  padding:10px 18px;border-radius:999px;font-size:13px;box-shadow:var(--shadow);z-index:50}
+footer{padding:34px 0 46px;font-size:12px;color:var(--ink-3);line-height:1.6}
+footer b{color:var(--ink-2)}
+
+@media print{
+  .top .act,.ask,.noprint,#toast{display:none!important}
+  body{background:#fff}
+  .t,.task,.note{box-shadow:none;break-inside:avoid}
+  .hero{background:#fff!important;color:var(--ink);border:1px solid var(--line-2)}
+  .hero .k,.hero .said,.hero .strip div{color:var(--ink-2)}
+  .hero .big,.hero .strip b,.hero .said b{color:var(--ink)}
+  .ev[open] .detail,.ev .detail{display:block}
+  details{open:true}
+  .ev textarea,.ev .noprint{display:none}
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="page in">
+    <div class="mark" aria-hidden="true"></div>
+    <div class="hd">
+      <div class="ttl">Обособленный спор</div>
+      <div class="who" id="caseLine">оспаривание сделки должника — движение по карточке kad.arbitr</div>
+    </div>
+    <div class="act">
+      <button class="btn" id="btnHelp">Инструкция</button>
+      <button class="btn" id="btnOpen">Открыть спор</button>
+      <button class="btn" id="btnSave" disabled>Сохранить спор</button>
+      <button class="btn pri" id="btnPrint" disabled>Печать / PDF</button>
+      <input type="file" id="fileJson" accept=".json,application/json" hidden>
+    </div>
+  </div>
+</header>
+
+<section class="ask">
+  <div class="page in">
+    <div class="line">
+      <div>
+        <label class="big" for="dateInput">Заявление подано</label>
+        <div class="datebox">
+          <input id="dateInput" type="text" inputmode="numeric" placeholder="дд.мм.гггг" autocomplete="off">
+          <button class="pick" id="datePick" type="button" title="Календарь" aria-label="Календарь">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+          </button>
+          <input class="nat" id="dateNative" type="date" tabindex="-1" aria-hidden="true">
+        </div>
+        <div class="echo" id="dateEcho"></div>
+      </div>
+      <div class="grow">
+        <label class="lb" for="urlInput">Ссылка на карточку дела</label>
+        <input id="urlInput" type="url" placeholder="https://kad.arbitr.ru/Card/…" autocomplete="off" spellcheck="false">
+        <div class="echo" id="urlEcho"></div>
+      </div>
+    </div>
+
+    <div class="drop" id="drop">
+      <label class="lb" for="paste">Страница карточки</label>
+      <textarea id="paste" placeholder="Откройте карточку дела на kad.arbitr.ru, выделите страницу (Ctrl+A), скопируйте (Ctrl+C) и вставьте сюда (Ctrl+V). Либо перетащите в это поле сохранённую страницу — .html или .mhtml."></textarea>
+      <div class="row">
+        <button class="btn pri" id="btnParse">Разобрать</button>
+        <button class="btn btn-sm" id="btnClear">Очистить</button>
+        <span class="echo" id="pasteEcho"></span>
+      </div>
+      <p class="hint">Программа работает только с тем, что вы вставили: <b>сама она на kad.arbitr не ходит</b> и в сеть ничего не отправляет. Данные остаются в этой странице до закрытия и сохраняются только в файл, который вы скачаете.</p>
+    </div>
+
+    <details class="adv">
+      <summary><span class="caret"></span>Уточнения — если разбор ошибся</summary>
+      <div class="advbody">
+        <div>
+          <label class="lb" for="applicantInput">Кто подал заявление</label>
+          <input id="applicantInput" type="text" placeholder="ПАО «Сбербанк России»">
+          <p class="hint">Помогает найти нужное заявление, когда в один день их несколько.</p>
+        </div>
+        <div>
+          <label class="lb" for="roleSelect">Финансовый управляющий в этом споре</label>
+          <select id="roleSelect">
+            <option value="">определить по карточке</option>
+            <option value="applicant">заявитель — оспаривает он</option>
+            <option value="participant">участник — оспаривает другое лицо</option>
+          </select>
+          <p class="hint">От этого зависит состав обязанностей: устранение недостатков или отзыв и документы.</p>
+        </div>
+        <div>
+          <label class="lb" for="hearingInput">Дата судебного заседания</label>
+          <input id="hearingInput" type="text" inputmode="numeric" placeholder="дд.мм.гггг">
+          <p class="hint">Если в карточке её нет, а в определении она указана.</p>
+        </div>
+        <div>
+          <label class="lb" for="subjectInput">Предмет спора</label>
+          <input id="subjectInput" type="text" placeholder="о признании недействительным договора дарения">
+          <p class="hint">Уточняет, какие документы карточки относятся к спору.</p>
+        </div>
+      </div>
+    </details>
+  </div>
+</section>
+
+<main class="page" id="result" hidden>
+  <div class="bento" id="tiles"></div>
+
+  <section class="sec" id="tasksSec">
+    <h3>Что требуется от финансового управляющего</h3>
+    <p class="m" id="tasksLead"></p>
+    <div id="tasks"></div>
+    <p class="hint" id="tasksNote"></p>
+  </section>
+
+  <section class="sec">
+    <h3>Движение спора</h3>
+    <p class="m" id="tlLead"></p>
+    <div class="tl" id="timeline"></div>
+  </section>
+
+  <section class="sec" id="maybeSec" hidden>
+    <h3>Возможно относится к спору</h3>
+    <p class="m">Поля «В ответ на» у этих документов нет или оно указывает на другое заявление. В движение спора они не включены — проверьте вручную.</p>
+    <div id="maybe"></div>
+  </section>
+
+  <section class="sec noprint">
+    <details>
+      <summary style="list-style:none;cursor:pointer;font-size:13.5px;color:var(--ink-2)"><span class="caret"></span> Проверка разбора</summary>
+      <div class="diag" id="diag" style="padding-top:12px"></div>
+    </details>
+  </section>
+</main>
+
+<div class="page" id="empty">
+  <div class="note" style="margin-top:24px">
+    <b>С чего начать.</b> Укажите дату, когда подано заявление об оспаривании сделки, и вставьте
+    страницу карточки дела. Программа найдёт в ней именно этот обособленный спор — по полю
+    «В ответ на», которым картотека связывает документы с заявлением, — покажет его движение,
+    текущую стадию и то, что требуется от финансового управляющего, со ссылками на нормы и
+    расчётом сроков.
+  </div>
+</div>
+
+<footer class="page">
+  <p><b>Данные не покидают устройство.</b> Страница ничего не отправляет в сеть: разбор,
+  правила и расчёт сроков работают в браузере. Автосохранения нет — сохранённый файл спора
+  вы получаете кнопкой «Сохранить спор», и он содержит персональные данные участников дела,
+  поэтому храните его вместе с материалами дела.</p>
+  <p><b>Выводы программы — не юридическая консультация.</b> Стадия и перечень действий выведены
+  из названий документов карточки и, если он вставлен, текста определения. Читайте определение:
+  суд формулирует требования своими словами, и правила не заменяют первоисточник.</p>
+</footer>
+
+<dialog id="help"><div class="modal">
+  <h2>Как это работает</h2>
+  <p>Программа отслеживает один обособленный спор — заявление об оспаривании сделки должника
+  в деле о банкротстве — и отвечает на два вопроса: на какой стадии спор и что сейчас требуется
+  от финансового управляющего.</p>
+
+  <h4>1. Ввод</h4>
+  <ul>
+    <li><b>Дата подачи заявления.</b> Поле принимает <code>23.06.2026</code>,
+      <code>23062026</code> (точки подставятся сами), <code>2026-06-23</code> и
+      <code>23 июня 2026</code> — последние два можно вставить прямо из документа.</li>
+    <li><b>Ссылка на карточку</b> нужна, чтобы вернуться к делу одним кликом, и сохраняется
+      в файле спора.</li>
+    <li><b>Страница карточки.</b> Откройте карточку на kad.arbitr.ru, нажмите Ctrl+A, затем
+      Ctrl+C и вставьте в поле. Можно перетащить сохранённую страницу (.html, .mhtml).</li>
+  </ul>
+  <p>Загрузить карточку по одной ссылке страница не может: kad.arbitr не разрешает другим
+  сайтам читать свои страницы (браузер блокирует такой запрос), а автоматические обращения
+  отсекает проверкой «вы не робот». Поэтому источник данных — ваша вставка.</p>
+
+  <h4>2. Как из карточки выделяется спор</h4>
+  <p>Картотека связывает документы с заявлением полем «В ответ на». Программа берёт
+  корневое заявление по дате подачи и добавляет всё, что отвечает ему, — а также то, что
+  отвечает уже добавленным документам: определение об оставлении без движения, документы во
+  исполнение этого определения, определение о принятии и так далее.</p>
+  <p>Каждое событие помечено достоверностью связи: <b>точно</b> — сошлись дата и название или
+  участник; <b>вероятно</b> — совпало что-то одно. Документы, похожие по предмету, но без
+  поля «В ответ на», в движение не попадают: они вынесены в отдельный список «Возможно
+  относится к спору» с указанием причины.</p>
+
+  <h4>3. Стадия и требования</h4>
+  <p>Тип документа определяется в два приёма: сначала природа — определение, заявление,
+  жалоба, — затем предмет. Без этого «Заявление о признании сделки недействительной» и
+  «Определение о признании сделки недействительной» неразличимы, а это начало спора и его
+  результат.</p>
+  <p>Перечень действий зависит от того, кто подал заявление. Оспаривает управляющий — недостатки
+  устраняет он. Оспаривает кредитор — управляющий участник спора: с него отзыв, документы по
+  сделке и явка. Роль определяется по карточке и переопределяется вручную в «Уточнениях».</p>
+
+  <h4>4. Сроки</h4>
+  <p>Сроки, исчисляемые днями, считаются в <b>рабочих</b> днях: нерабочие дни в такой срок не
+  включаются (ч. 3 ст. 113 АПК РФ), а течение начинается со следующего дня после события
+  (ч. 4 ст. 113 АПК РФ). Наивный расчёт «дата плюс десять» даёт срок раньше настоящего и
+  создаёт ложную просрочку.</p>
+  <p>Учтены нерабочие праздничные дни по ст. 112 ТК РФ и общее правило переноса выходного,
+  совпавшего с праздником. Переносы, которые Правительство устанавливает отдельным
+  постановлением на каждый год, программе неизвестны, поэтому срок, внутрь которого попали
+  праздники, помечается как приблизительный.</p>
+
+  <h4>5. Текст определения</h4>
+  <p>Названия документа не всегда достаточно: срок устранения недостатков, дата заседания и
+  поручения суда есть только в тексте. Раскройте событие в движении спора и вставьте текст
+  определения — программа найдёт резолютивную часть, сроки, дату заседания и адресные
+  требования, и покажет их вместе с исходной фразой, чтобы вывод можно было проверить.</p>
+
+  <h4>6. Хранение</h4>
+  <p>Автосохранения нет. «Сохранить спор» даёт файл <code>.json</code> с датами, вставленными
+  текстами и уточнениями; «Открыть спор» возвращает его обратно. В файле персональные данные
+  участников дела — храните его там же, где материалы дела.</p>
+
+  <div class="close"><button class="btn pri" id="helpClose">Понятно</button></div>
+</div></dialog>
+
+<!-- @@DATES@@ -->
+<!-- @@CARD@@ -->
+<!-- @@RULES@@ -->
+<!-- @@DISPUTE@@ -->
+<!-- @@APP@@ -->
+</body>
+</html>

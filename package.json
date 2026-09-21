@@ -1,0 +1,11 @@
+{
+  "name": "kadmonitoring",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Движение обособленного спора об оспаривании сделки должника по карточке kad.arbitr",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node test/run.mjs"
+  }
+}

@@ -1,0 +1,13 @@
+node_modules/
+
+# Собранный офлайн-файл с русским именем — дубль dist/index.html, в репозитории не нужен
+dist/Обособленный спор.html
+
+# Персональные данные: карточки дел и сохранённые споры не должны попасть в git
+*.mhtml
+*.json
+!package.json
+!test/fixtures/*.json
+
+# Шрифт качается локально (tools/fetch-font.mjs), в git не хранится
+src/fonts/
