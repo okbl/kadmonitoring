@@ -1,10 +1,11 @@
 /*
  * Логика страницы. Наружу ничего не выставляет.
  *
- * Режимов два. Страница без сервера (файл с диска, GitHub Pages) работает
- * только со вставкой и хранит спор в скачанном файле. Страница, которую отдаёт
- * локальный сервер (server.mjs), вдобавок загружает карточку по ссылке,
- * тексты определений из PDF и держит список отслеживаемых споров.
+ * Режимов три. Страница без хранилища (файл с диска, GitHub Pages) работает
+ * только со вставкой и хранит спор в скачанном файле. Страница расширения
+ * браузера и страница локального сервера (server.mjs) вдобавок загружают
+ * карточку по ссылке, тексты определений из PDF и держат список
+ * отслеживаемых споров — на устройстве пользователя, не где-то ещё.
  * Разбор, правила и сроки в обоих режимах одни и те же и считаются здесь,
  * в браузере; сервер только приносит данные и хранит их.
  */
@@ -35,8 +36,6 @@
   let viewKnown = null;    // «новое» считается от того, что было известно при открытии
   let card = null;
   let dispute = null;
-  let server = null;       // ответ /api/ping, если страницу отдал сервер
-  let cloud = null;        // data/index.json, если споры проверяет GitHub Actions
   const opened = new Set();  // раскрытые события переживают перерисовку
 
   /* ---------- мелочи ---------- */
@@ -132,13 +131,13 @@
     $('urlOpen').hidden = !m;
     if (m) $('urlOpen').href = `https://kad.arbitr.ru/Card/${m[1]}`;
     $('btnFetch').disabled = !m;
-    if (!v) echo('urlEcho', server ? 'Вставьте ссылку и нажмите «Загрузить с kad.arbitr»' : '');
+    if (!v) echo('urlEcho', backend ? 'Вставьте ссылку и нажмите «Загрузить с kad.arbitr»' : '');
     else if (!m) echo('urlEcho', 'Ожидается ссылка вида https://kad.arbitr.ru/Card/…', true);
     else echo('urlEcho', card && card.meta.caseNo ? `Дело ${card.meta.caseNo}` : 'Ссылка на карточку дела');
   }
   $('urlInput').addEventListener('input', readUrl);
   $('urlInput').addEventListener('change', () => { readUrl(); scheduleSave(); });
-  $('urlInput').addEventListener('keydown', (e) => { if (e.key === 'Enter' && server && KAD_URL.test(S.url)) fetchCard(); });
+  $('urlInput').addEventListener('keydown', (e) => { if (e.key === 'Enter' && backend && KAD_URL.test(S.url)) fetchCard(); });
 
   /* ---------- вставка и файлы ---------- */
 
@@ -311,7 +310,7 @@
 
   function reportParse(d) {
     if (!S.card.raw.trim()) {
-      echo('pasteEcho', server ? 'Карточка ещё не загружена — нажмите «Загрузить с kad.arbitr»' : 'Карточка не вставлена — показано только то, что следует из даты подачи');
+      echo('pasteEcho', backend ? 'Карточка ещё не загружена — нажмите «Загрузить с kad.arbitr»' : 'Карточка не вставлена — показано только то, что следует из даты подачи');
       return;
     }
     const g = card.diagnostics;
@@ -477,7 +476,7 @@
         <textarea data-text="${esc(r.id)}" placeholder="Вставьте текст судебного акта — программа найдёт сроки, дату заседания и поручения управляющему">${esc(S.texts[r.id] || '')}</textarea>
         <div class="acts noprint">
           <button class="btn btn-sm" data-act="text" data-id="${esc(r.id)}">Разобрать текст</button>
-          ${r.pdf ? `<button class="btn btn-sm srv nocld" data-act="pdf" data-id="${esc(r.id)}">Загрузить текст из PDF</button>` : ''}
+          ${r.pdf ? `<button class="btn btn-sm srv" data-act="pdf" data-id="${esc(r.id)}">Загрузить текст из PDF</button>` : ''}
           ${S.texts[r.id] ? `<button class="linkbtn" data-act="untext" data-id="${esc(r.id)}">убрать текст</button>` : ''}
         </div>
         ${e.ruling ? rulingHtml(e.ruling) : ''}`;
@@ -591,14 +590,81 @@
     else delete S.texts[id];
   }
 
-  /* ---------- сервер: загрузка карточки и текстов ---------- */
+  /* ---------- где живут споры: сервер на компьютере или расширение ---------- */
 
+  /*
+   * Два хранилища с одним устройством. Сервер (server.mjs) — споры в папке
+   * data на компьютере, карточки загружает его браузер. Расширение — споры в
+   * chrome.storage этого браузера, карточки загружает фоновая часть
+   * расширения. И там и там данные остаются на устройстве пользователя;
+   * наружу идут только запросы к kad.arbitr.ru.
+   */
   async function api(path, opts) {
     const res = await fetch(path, { ...opts, headers: { 'Content-Type': 'application/json', ...(opts && opts.headers) } });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || `сервер ответил ${res.status}`);
     return data;
   }
+
+  const Http = {
+    kind: 'server',
+    info: null,
+    async init() {
+      if (!/^https?:$/.test(location.protocol)) return null;
+      const r = await fetch('/api/ping').catch(() => null);
+      if (!r || !r.ok) return null;
+      this.info = await r.json();
+      return this;
+    },
+    card: (url) => api('/api/fetch', { method: 'POST', body: JSON.stringify({ url }) }),
+    pdf: async (url) => (await api(`/api/pdf?url=${encodeURIComponent(url)}`)).text,
+    list: () => api('/api/disputes'),
+    get: (id) => api(`/api/disputes/${encodeURIComponent(id)}`),
+    async save(st) {
+      const body = JSON.stringify(st);
+      const r = st.id
+        ? await api(`/api/disputes/${encodeURIComponent(st.id)}`, { method: 'PUT', body })
+        : await api('/api/disputes', { method: 'POST', body });
+      return r.id;
+    },
+    remove: (id) => api(`/api/disputes/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+    refresh: (id) => api(`/api/disputes/${encodeURIComponent(id)}/refresh`, { method: 'POST' }),
+    note() {
+      const h = this.info && this.info.checkHours;
+      return h ? `сервер проверяет карточки каждые ${h} ч` : 'плановая проверка выключена';
+    }
+  };
+
+  const Ext = {
+    kind: 'ext',
+    settings: null,
+    async init() {
+      const c = globalThis.chrome;
+      if (!(c && c.runtime && c.runtime.id && c.storage && c.storage.local)) return null;
+      this.settings = await this.send({ type: 'settings' });
+      return this;
+    },
+    async send(msg) {
+      const r = await chrome.runtime.sendMessage(msg);
+      if (!r) throw new Error('расширение не ответило');
+      if (r.error) throw new Error(r.error);
+      return r;
+    },
+    card(url) { return this.send({ type: 'card', url }); },
+    async pdf(url) { return (await this.send({ type: 'pdf', url })).text; },
+    async list() { return (await this.send({ type: 'list' })).items; },
+    async get(id) { return (await this.send({ type: 'get', id })).state; },
+    // Сохраняет фоновая часть: там же поля проверки и сводка — одна запись на всех.
+    async save(st) { return (await this.send({ type: 'save', state: st })).id; },
+    remove(id) { return this.send({ type: 'remove', id }); },
+    refresh(id) { return this.send({ type: 'check', id }); },
+    note() {
+      const h = this.settings && this.settings.checkHours;
+      return h ? `карточки проверяются каждые ${h} ч, пока открыт браузер` : 'плановая проверка выключена';
+    }
+  };
+
+  let backend = null;
 
   $('btnFetch').addEventListener('click', fetchCard);
 
@@ -608,7 +674,7 @@
     const done = busy($('btnFetch'), 'Загружаю…');
     echo('pasteEcho', 'Открываю карточку на kad.arbitr.ru — обычно это занимает 10–60 секунд…');
     try {
-      const r = await api('/api/fetch', { method: 'POST', body: JSON.stringify({ url: S.url }) });
+      const r = await backend.card(S.url);
       setCard(r.text, false, r.source || 'kad.arbitr', r.at);
       run();
       if (r.note) toast(r.note);
@@ -622,7 +688,8 @@
 
   /** Тексты судебных актов спора, которых ещё нет, — по одному, чтобы не частить. */
   async function loadActs() {
-    if (!server || !dispute) return;
+    if (!backend || !dispute) return;
+    if (backend.kind === 'ext' && !(backend.settings && backend.settings.pdfTexts)) return;
     const mine = S;
     const todo = dispute.events.filter((e) => isAct(e) && e.rec.pdf && !S.texts[e.rec.id]);
     let n = 0;
@@ -632,8 +699,8 @@
       n++;
       echo('pasteEcho', `Загружаю тексты определений: ${n} из ${todo.length}…`);
       try {
-        const r = await api(`/api/pdf?url=${encodeURIComponent(e.rec.pdf)}`);
-        if (r.text) mine.texts[e.rec.id] = r.text;
+        const text = await backend.pdf(e.rec.pdf);
+        if (text) mine.texts[e.rec.id] = text;
       } catch (err) {
         toast(`Текст от ${D.fmt(e.rec.date)} не загружен: ${err.message}`);
       }
@@ -643,12 +710,12 @@
 
   async function loadPdf(id, btn) {
     const e = dispute && dispute.events.find((x) => x.rec.id === id);
-    if (!e || !e.rec.pdf) return;
+    if (!e || !e.rec.pdf || !backend) return;
     const done = busy(btn, 'Загружаю…');
     try {
-      const r = await api(`/api/pdf?url=${encodeURIComponent(e.rec.pdf)}`);
-      if (!r.text) throw new Error('в PDF нет текстового слоя — это скан');
-      S.texts[id] = r.text;
+      const text = await backend.pdf(e.rec.pdf);
+      if (!text) throw new Error('в PDF нет текстового слоя — это скан');
+      S.texts[id] = text;
       opened.add(id);
       run();
     } catch (err) {
@@ -671,8 +738,7 @@
   function openState(obj) {
     if (!obj || obj.app !== 'kadmonitoring') throw new Error('это не файл спора');
     S = { ...blank(), ...obj, card: { ...blank().card, ...(obj.card || {}) } };
-    delete S.summary;
-    delete S.savedAt;
+    for (const k of ['summary', 'savedAt', 'checkedAt', 'error', 'note', 'notified', 'createdAt']) delete S[k];
     viewKnown = S.known ? [...S.known] : null;
     opened.clear();
     fillInputs();
@@ -686,18 +752,19 @@
     return `Спор ${no} от ${S.filed ? D.fmt(S.filed) : 'без даты'}.json`.replace(/[\\/:*?"<>|]/g, '-');
   }
 
+  function download(obj, name) {
+    const blob = new Blob([JSON.stringify(obj, null, 1)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
+
   $('btnSave').addEventListener('click', async () => {
-    if (!server) {
-      const blob = new Blob([JSON.stringify(snapshot(), null, 1)], { type: 'application/json' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = fileName();
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-      return;
-    }
+    if (!backend) { download(snapshot(), fileName()); return; }
     try {
-      await saveServer();
+      await saveTracked();
       toast('Спор сохранён и отслеживается');
     } catch (err) { toast(`Не сохранено: ${err.message}`); }
   });
@@ -707,28 +774,37 @@
     const f = e.target.files[0];
     e.target.value = '';
     if (!f) return;
-    try { openState(JSON.parse(await f.text())); } catch (err) { toast(`Не открыт: ${err.message}`); }
+    try {
+      const obj = JSON.parse(await f.text());
+      // Файл из «Скачать все споры» — несколько споров сразу.
+      if (backend && obj && Array.isArray(obj.disputes)) {
+        for (const st of obj.disputes) await backend.save({ ...st, id: null });
+        toast(`Загружено споров: ${obj.disputes.length}`);
+        showList();
+        return;
+      }
+      if (backend) showForm();
+      openState(obj);
+      if (backend) { S.id = null; await saveTracked(); }
+    } catch (err) { toast(`Не открыт: ${err.message}`); }
   });
 
-  async function saveServer() {
-    const body = JSON.stringify(snapshot());
-    const r = S.id
-      ? await api(`/api/disputes/${encodeURIComponent(S.id)}`, { method: 'PUT', body })
-      : await api('/api/disputes', { method: 'POST', body });
-    S.id = r.id;
+  async function saveTracked() {
+    S.id = await backend.save(snapshot());
     if (location.hash !== `#d=${S.id}`) history.replaceState(null, '', `#d=${S.id}`);
-    $('btnSave').textContent = 'Сохранить спор';
   }
 
-  /* Отслеживаемый спор на сервере сохраняется сам — после каждого изменения. */
+  /* Отслеживаемый спор сохраняется сам — после каждого изменения. */
   let saveTimer = 0;
   function scheduleSave() {
-    if (!server || !S.id) return;
+    if (!backend || !S.id) return;
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => saveServer().catch((err) => toast(`Не сохранено: ${err.message}`)), 700);
+    saveTimer = setTimeout(() => saveTracked().catch((err) => toast(`Не сохранено: ${err.message}`)), 700);
   }
 
   /* ---------- список споров ---------- */
+
+  const when = (iso) => new Date(iso).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
   function showForm() {
     $('listSec').hidden = true;
@@ -745,26 +821,16 @@
     history.replaceState(null, '', location.pathname);
     $('list').innerHTML = '<div class="note">Загружаю список…</div>';
     try {
-      const items = cloud ? (await loadCloudIndex()).items : await api('/api/disputes');
-      renderList(items);
+      renderList(await backend.list());
     } catch (err) {
       $('list').innerHTML = `<div class="note warn">Список не загружен: ${esc(err.message)}</div>`;
     }
   }
 
   function renderList(items) {
-    if (cloud) {
-      $('listNote').textContent = `проверяет GitHub${cloud.schedule ? ': ' + cloud.schedule : ''}` +
-        (cloud.updatedAt ? ` · обновлено ${when(cloud.updatedAt)}` : '');
-      $('linkRunAll').href = `https://github.com/${cloud.repo}/actions/workflows/monitor.yml`;
-    } else {
-      const hours = server && server.checkHours;
-      $('listNote').textContent = hours ? `сервер проверяет карточки каждые ${hours} ч` : 'плановая проверка выключена';
-    }
+    $('listNote').textContent = backend.note();
     if (!items.length) {
-      $('list').innerHTML = cloud
-        ? '<div class="note">Отслеживаемых споров пока нет. Нажмите «Новый спор», укажите дату подачи и ссылку на карточку и нажмите «Отслеживать на GitHub».</div>'
-        : '<div class="note">Отслеживаемых споров пока нет. Нажмите «Новый спор», укажите дату подачи и ссылку на карточку, загрузите её и нажмите «Сохранить спор».</div>';
+      $('list').innerHTML = '<div class="note">Отслеживаемых споров пока нет. Нажмите «Новый спор», укажите дату подачи и ссылку на карточку, нажмите «Загрузить с kad.arbitr» и «Сохранить спор».</div>';
       return;
     }
     $('list').innerHTML = items.map((it) => {
@@ -779,11 +845,9 @@
         <div><span class="s">${esc(hearing)}</span>
           <span class="s ${s.overdue ? 'acc' : ''}">${s.overdue ? `истекло сроков: ${s.overdue} · ` : ''}${esc(next.slice(0, 120))}</span>
           <span class="s">${it.checkedAt ? `проверено ${when(it.checkedAt)}` : 'ещё не проверялось'}${it.error ? ` · <span style="color:var(--acc)">${esc(it.error)}</span>` : ''}</span></div>
-        <div class="r">${cloud
-          ? `<a class="btn btn-sm" href="https://github.com/${esc(cloud.repo)}/issues/${esc(it.issue)}" target="_blank" rel="noopener noreferrer">задача #${esc(it.issue)}</a>`
-          : `${s.newEvents ? `<span class="b new">новое: ${s.newEvents}</span>` : ''}
+        <div class="r">${s.newEvents ? `<span class="b new">новое: ${s.newEvents}</span>` : ''}
           <button class="btn btn-sm" data-check="${esc(it.id)}">Проверить</button>
-          <button class="linkbtn" data-del="${esc(it.id)}">удалить</button>`}</div>
+          <button class="linkbtn" data-del="${esc(it.id)}">удалить</button></div>
       </div>`;
     }).join('');
   }
@@ -795,26 +859,25 @@
     const row = e.target.closest('[data-open]');
     if (chk) {
       const done = busy(chk, 'Проверяю…');
-      try { await api(`/api/disputes/${encodeURIComponent(chk.dataset.check)}/refresh`, { method: 'POST' }); await showList(); }
+      try { await backend.refresh(chk.dataset.check); await showList(); }
       catch (err) { toast(err.message); done(); }
       return;
     }
     if (del) {
       if (!confirm('Удалить спор из отслеживания? Сохранённые данные будут удалены.')) return;
-      try { await api(`/api/disputes/${encodeURIComponent(del.dataset.del)}`, { method: 'DELETE' }); await showList(); }
+      try { await backend.remove(del.dataset.del); await showList(); }
       catch (err) { toast(err.message); }
       return;
     }
-    if (row) openFromServer(row.dataset.open);
+    if (row) openTracked(row.dataset.open);
   });
 
-  async function openFromServer(id) {
+  async function openTracked(id) {
     try {
-      const obj = cloud ? await cloudDispute(id) : await api(`/api/disputes/${encodeURIComponent(id)}`);
+      const obj = await backend.get(id);
       showForm();
       openState(obj);
-      if (cloud) remember(id, S.known);
-      history.replaceState(null, '', `#${cloud ? 'c' : 'd'}=${id}`);
+      history.replaceState(null, '', `#d=${id}`);
       scheduleSave();
     } catch (err) {
       toast(`Спор не открыт: ${err.message}`);
@@ -832,7 +895,6 @@
     fillInputs();
     echo('pasteEcho', '');
     $('result').hidden = true;
-    $('btnSave').textContent = 'Сохранить спор';
     showForm();
     history.replaceState(null, '', location.pathname);
     dateInput.focus();
@@ -840,66 +902,52 @@
   $('btnCheckAll').addEventListener('click', async (e) => {
     const done = busy(e.target, 'Проверяю…');
     try {
-      const items = await api('/api/disputes');
+      const items = await backend.list();
       for (const it of items) {
         e.target.textContent = `Проверяю ${items.indexOf(it) + 1} из ${items.length}…`;
-        try { await api(`/api/disputes/${encodeURIComponent(it.id)}/refresh`, { method: 'POST' }); }
+        try { await backend.refresh(it.id); }
         catch (err) { toast(`${(it.summary && it.summary.caseNo) || it.id}: ${err.message}`); }
       }
     } finally { done(); showList(); }
   });
 
-  /* ---------- облако: споры проверяет GitHub Actions ---------- */
+  /* Резервная копия: все споры одним файлом — перенести на другое устройство. */
+  $('btnExport').addEventListener('click', async () => {
+    try {
+      const items = await backend.list();
+      const disputes = [];
+      for (const it of items) disputes.push(await backend.get(it.id));
+      download({ app: 'kadmonitoring', v: 1, exportedAt: new Date().toISOString(), disputes },
+        `Обособленные споры ${D.fmt(D.today())}.json`);
+    } catch (err) { toast(`Не выгружено: ${err.message}`); }
+  });
+  $('btnImport').addEventListener('click', () => $('fileJson').click());
 
-  const when = (iso) => new Date(iso).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  /* ---------- настройки расширения ---------- */
 
-  /* Сводку публикует tools/cloud-check.mjs рядом со страницей. */
-  async function loadCloudIndex() {
-    if (!/^https?:$/.test(location.protocol)) throw new Error('страница открыта с диска');
-    const r = await fetch('data/index.json', { cache: 'no-store' });
-    if (!r.ok) throw new Error(`data/index.json: ${r.status}`);
-    const j = await r.json();
-    if (!j || j.app !== 'kadmonitoring') throw new Error('это не сводка споров');
-    cloud = j;
-    return j;
+  function renderSettings() {
+    if (!backend || backend.kind !== 'ext') return;
+    const st = backend.settings || {};
+    $('setHours').value = String(st.checkHours || 0);
+    $('setNotify').checked = !!st.notify;
+    $('setPdf').checked = !!st.pdfTexts;
   }
-
-  async function cloudDispute(id) {
-    if (!/^\d+$/.test(String(id))) throw new Error('нет такого спора');
-    const r = await fetch(`data/${id}.json`, { cache: 'no-store' });
-    if (!r.ok) throw new Error(`спор не найден (${r.status})`);
-    const obj = await r.json();
-    // «Новое» — относительно того, что видел этот браузер; хранится в нём же.
-    obj.known = seenIn(id);
-    return obj;
+  async function saveSettings(patch) {
+    backend.settings = await backend.send({ type: 'settings', set: patch });
+    renderSettings();
+    $('listNote').textContent = backend.note();
   }
-
-  function seenIn(id) {
-    try { const v = JSON.parse(localStorage.getItem(`kad-seen-${id}`) || 'null'); return Array.isArray(v) ? v : null; }
-    catch (_) { return null; }
-  }
-  function remember(id, ids) {
-    try { if (ids) localStorage.setItem(`kad-seen-${id}`, JSON.stringify(ids)); } catch (_) { /* приватный режим */ }
-  }
-
-  /* Поставить спор на отслеживание: готовая задача на GitHub, её остаётся отправить. */
-  $('btnTrack').addEventListener('click', () => {
-    readDate();
-    readUrl();
-    if (!S.filed) { toast('Укажите дату подачи заявления'); dateInput.focus(); return; }
-    if (!KAD_URL.test(S.url)) { toast('Нужна ссылка на карточку kad.arbitr.ru'); $('urlInput').focus(); return; }
-    const role = S.role === 'applicant' ? 'заявитель' : S.role === 'participant' ? 'участник' : '(необязательно: заявитель или участник)';
-    const title = `Спор: заявление от ${D.fmt(S.filed)}${card && card.meta.caseNo ? `, дело ${card.meta.caseNo}` : ''}`;
-    const body = [
-      `Дата подачи: ${D.fmt(S.filed)}`,
-      `Ссылка: ${S.url.match(KAD_URL)[0]}`,
-      `Заявитель: ${S.applicant || '(необязательно)'}`,
-      `Роль управляющего: ${role}`,
-      '',
-      'Эта задача — отслеживаемый спор. Карточка проверяется по расписанию, о новых документах появится комментарий. Чтобы проверить сейчас, напишите «проверить». Закройте задачу, чтобы снять спор с отслеживания.'
-    ].join('\n');
-    window.open(`https://github.com/${cloud.repo}/issues/new?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`, '_blank', 'noopener');
-    echo('pasteEcho', 'Отправьте задачу на GitHub («Submit new issue»). Через 1–3 минуты спор появится в «Моих спорах», а в задаче — первый отчёт.');
+  $('setHours').addEventListener('change', (e) => saveSettings({ checkHours: +e.target.value }));
+  $('setNotify').addEventListener('change', (e) => saveSettings({ notify: e.target.checked }));
+  $('setPdf').addEventListener('change', async (e) => {
+    // Тексты определений картотека отдаёт только браузеру, прошедшему её
+    // проверку; расширение читает их через отладчик вкладки — это отдельное
+    // разрешение, и браузер спросит его сам.
+    if (e.target.checked) {
+      const ok = await chrome.permissions.request({ permissions: ['debugger'] }).catch(() => false);
+      if (!ok) { e.target.checked = false; toast('Без разрешения тексты определений загружаться не будут'); return; }
+    }
+    saveSettings({ pdfTexts: e.target.checked });
   });
 
   /* ---------- прочее ---------- */
@@ -917,22 +965,14 @@
   window.addEventListener('afterprint', () => { printOpen.forEach((d) => { d.open = false; }); printOpen = []; });
 
   async function init() {
-    if (/^https?:$/.test(location.protocol)) {
-      try {
-        const r = await fetch('/api/ping');
-        if (r.ok) server = await r.json();
-      } catch (_) { server = null; }
-    }
-    if (!server) {
-      try { await loadCloudIndex(); } catch (_) { cloud = null; }
-    }
-    document.body.classList.toggle('server', !!(server || cloud));
-    document.body.classList.toggle('cloud', !!cloud);
+    backend = await Ext.init().catch(() => null) || await Http.init().catch(() => null);
+    document.body.classList.toggle('server', !!backend);
+    document.body.classList.toggle('ext', !!backend && backend.kind === 'ext');
     readUrl();
-    if (!server && !cloud) return;
-    $('btnSave').textContent = 'Сохранить спор';
-    const m = location.hash.match(/^#[dc]=([\w-]+)$/);
-    if (m) openFromServer(m[1]);
+    if (!backend) return;
+    renderSettings();
+    const m = location.hash.match(/^#d=([\w-]+)$/);
+    if (m) openTracked(m[1]);
     else showList();
   }
 

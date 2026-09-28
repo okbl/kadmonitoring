@@ -25,7 +25,7 @@ import { fileURLToPath } from 'url';
 import { assemble } from './build.mjs';
 import { KadFetcher } from './server/kad-fetch.mjs';
 import { pdfText } from './server/pdf-text.mjs';
-import { chooseText } from './server/card-text.mjs';
+import './src/kad-items.js';
 import './src/dates.js';
 import './src/kad.js';
 import './src/rules.js';
@@ -134,7 +134,7 @@ const isAct = (e) => !e.rec.synthetic && /^(?:ruling|decision|appealRuling|proto
 async function fetchCard(url) {
   try {
     const r = await fetcher.card(url);
-    return { ...chooseText(r, url), at: r.at };
+    return { ...globalThis.KadItems.chooseText(r, url), at: r.at };
   } catch (e) {
     if (e instanceof HttpError) throw e;
     throw new HttpError(e.status || 502, e.message);

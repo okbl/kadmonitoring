@@ -47,7 +47,10 @@ const CARD_HTML = `<!doctype html><html lang="ru"><head><meta charset="utf-8"><t
 <div>Дело о несостоятельности (банкротстве) гражданина</div>
 <div>Арбитражный суд города Москвы</div>
 <div>Должник: Иванов Иван Иванович</div>
-<h2>Первая инстанция</h2>
+<div class="b-chrono-item-header js-chrono-item-header" data-id="inst1">
+  <strong>Первая инстанция</strong>
+  <input type="hidden" class="js-instanceId" value="inst1">
+</div>
 <ul id="chrono"></ul>
 <script>
 fetch('/Kad/InstanceDocumentsPage?_=' + Date.now() + '&id=inst1&caseId=${CASE}&withProtocols=true&perPage=${PER_PAGE}&page=1',
@@ -70,6 +73,7 @@ fetch('/Kad/InstanceDocumentsPage?_=' + Date.now() + '&id=inst1&caseId=${CASE}&w
  */
 export function startMock({ pdf, wall = false } = {}) {
   const hits = [];
+  const setPdf = (b) => { pdf = b; };
   const server = http.createServer((req, res) => {
     const u = new URL(req.url, 'http://x');
     hits.push(u.pathname);
@@ -105,6 +109,6 @@ export function startMock({ pdf, wall = false } = {}) {
     res.end();
   });
   return new Promise((resolve) => server.listen(0, '127.0.0.1', () => {
-    resolve({ base: `http://127.0.0.1:${server.address().port}`, hits, close: () => new Promise((r) => server.close(r)) });
+    resolve({ base: `http://127.0.0.1:${server.address().port}`, hits, setPdf, close: () => new Promise((r) => server.close(r)) });
   }));
 }

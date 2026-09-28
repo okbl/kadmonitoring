@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Обособленный спор",
+  "version": "0.0.0",
+  "description": "Движение обособленного спора по карточке kad.arbitr: стадия, сроки, что требуется от финансового управляющего. Данные хранятся только в этом браузере.",
+  "icons": { "16": "icons/16.png", "32": "icons/32.png", "48": "icons/48.png", "128": "icons/128.png" },
+  "action": {
+    "default_title": "Обособленные споры",
+    "default_icon": { "16": "icons/16.png", "32": "icons/32.png" }
+  },
+  "background": { "service_worker": "background.js", "type": "module" },
+  "permissions": ["storage", "unlimitedStorage", "alarms", "notifications", "scripting"],
+  "optional_permissions": ["debugger"],
+  "host_permissions": ["https://kad.arbitr.ru/*"],
+  "minimum_chrome_version": "116"
+}

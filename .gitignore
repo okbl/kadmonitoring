@@ -9,6 +9,7 @@ dist/Обособленный спор.html
 !package.json
 !package-lock.json
 !test/fixtures/*.json
+!extension/manifest.json
 
 # Шрифт качается локально (tools/fetch-font.mjs), в git не хранится
 src/fonts/
@@ -16,3 +17,7 @@ src/fonts/
 # Сервер: отслеживаемые споры, кэш текстов актов и профиль браузера с cookies
 data/
 .kad-profile/
+
+# Сборка расширения — выкладывается на сайт (npm run pages), в git не хранится
+dist/extension/
+dist/*.zip

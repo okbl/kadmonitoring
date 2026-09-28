@@ -1,13 +1,15 @@
-# Проба: пускает ли kad.arbitr.ru серверы GitHub и как устроена настоящая
-# карточка. Запускается при изменении самой пробы; результат — в журнале.
+# Проба на настоящей картотеке: расширение браузера загружает карточку,
+# ставит спор на отслеживание и загружает тексты определений. В журнал
+# попадают только сводные числа и стадия — без имён и текстов.
 name: kad-probe
 
 on:
+  workflow_dispatch:
   push:
     paths:
       - '.github/workflows/kad-probe.yml'
-      - 'tools/kad-probe.mjs'
-  workflow_dispatch:
+      - 'tools/ext-probe.mjs'
+      - 'extension/**'
 
 jobs:
   probe:
@@ -19,17 +21,7 @@ jobs:
         with:
           node-version: 22
       - run: npm ci
-      - name: Без окна (Chrome с раннера)
-        id: headless
-        continue-on-error: true
-        run: node tools/kad-probe.mjs https://kad.arbitr.ru/Card/2aa24115-6d6f-4b9e-9c17-cd43a0bd8ef5 23.06.2026
-      - name: С окном под Xvfb
-        if: steps.headless.outcome == 'failure'
-        continue-on-error: true
-        env:
-          KAD_WINDOW: '1'
-        run: |
-          sudo apt-get install -y xvfb >/dev/null
-          xvfb-run -a node tools/kad-probe.mjs https://kad.arbitr.ru/Card/2aa24115-6d6f-4b9e-9c17-cd43a0bd8ef5 23.06.2026
-      - name: Откуда запрос
-        run: curl -sS https://ipinfo.io/json | grep -E '"(ip|country|org)"' || true
+      # Chrome с раннера расширения из папки не загружает; Chromium — загружает.
+      - run: npx playwright-core install chromium
+      - name: Расширение на настоящей карточке
+        run: node tools/ext-probe.mjs https://kad.arbitr.ru/Card/2aa24115-6d6f-4b9e-9c17-cd43a0bd8ef5 23.06.2026

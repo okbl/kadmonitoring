@@ -213,8 +213,14 @@ footer b{color:var(--ink-2)}
 body:not(.server) .srv{display:none!important}
 body.server .off{display:none!important}
 /* облако: споры проверяет GitHub Actions, страница только показывает */
-body:not(.cloud) .cld{display:none!important}
-body.cloud .nocld{display:none!important}
+/* расширение браузера: споры в хранилище этого браузера */
+body:not(.ext) .ext{display:none!important}
+body.ext .noext{display:none!important}
+.settings{display:flex;gap:16px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:var(--ink-2);
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r-sm);padding:9px 14px;margin-bottom:12px}
+.settings label{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+.settings select{width:auto;padding:4px 8px;font-size:12.5px}
+.settings .m{margin-left:auto}
 .urlrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .urlrow input{flex:1 1 260px;min-width:0}
 .btn.busy{opacity:.7;cursor:progress}
@@ -285,9 +291,23 @@ a.btn{text-decoration:none;display:inline-block}
     <div class="lhead">
       <h3>Отслеживаемые споры</h3>
       <span class="m" id="listNote"></span>
-      <button class="btn btn-sm nocld" id="btnCheckAll">Проверить все</button>
-      <a class="btn btn-sm cld" id="linkRunAll" target="_blank" rel="noopener noreferrer">Проверить все сейчас</a>
+      <button class="btn btn-sm" id="btnCheckAll">Проверить все</button>
       <button class="btn btn-sm pri" id="btnNew">Новый спор</button>
+    </div>
+    <div class="settings ext">
+      <label>Проверять карточки
+        <select id="setHours">
+          <option value="1">каждый час</option>
+          <option value="2">каждые 2 часа</option>
+          <option value="4">каждые 4 часа</option>
+          <option value="8">каждые 8 часов</option>
+          <option value="24">раз в сутки</option>
+          <option value="0">только вручную</option>
+        </select>
+      </label>
+      <label><input type="checkbox" id="setNotify"> уведомлять о новых документах</label>
+      <label title="Картотека отдаёт PDF только браузеру, прошедшему её проверку; расширение читает файл через отладчик вкладки — браузер спросит разрешение"><input type="checkbox" id="setPdf"> загружать тексты определений (PDF)</label>
+      <span class="m"><button class="linkbtn" id="btnExport">скачать все споры файлом</button> · <button class="linkbtn" id="btnImport">загрузить из файла</button></span>
     </div>
     <div id="list"></div>
   </div>
@@ -312,8 +332,7 @@ a.btn{text-decoration:none;display:inline-block}
         <label class="lb" for="urlInput">Ссылка на карточку дела</label>
         <div class="urlrow">
           <input id="urlInput" type="url" placeholder="https://kad.arbitr.ru/Card/…" autocomplete="off" spellcheck="false">
-          <button class="btn pri srv nocld" id="btnFetch" type="button">Загрузить с kad.arbitr</button>
-          <button class="btn pri cld" id="btnTrack" type="button">Отслеживать на GitHub</button>
+          <button class="btn pri srv" id="btnFetch" type="button">Загрузить с kad.arbitr</button>
           <a class="btn btn-sm" id="urlOpen" target="_blank" rel="noopener noreferrer" hidden>Открыть карточку</a>
         </div>
         <div class="echo" id="urlEcho"></div>
@@ -328,9 +347,9 @@ a.btn{text-decoration:none;display:inline-block}
         <button class="btn btn-sm" id="btnClear">Очистить</button>
         <span class="echo" id="pasteEcho"></span>
       </div>
-      <p class="hint off">Страница работает без сервера, поэтому только с тем, что вы вставили: <b>сама она на kad.arbitr не ходит</b> и вставленное никуда не отправляет — разбор идёт в вашем браузере. Чтобы карточка загружалась по ссылке и споры проверялись сами, запустите программу как сервер на своём компьютере — см. «Инструкцию».</p>
-      <p class="hint cld">Карточки загружает и разбирает GitHub — по расписанию, без вашего участия. Чтобы поставить спор на отслеживание, укажите дату подачи и ссылку и нажмите <b>«Отслеживать на GitHub»</b>: откроется готовая задача, её остаётся отправить. Через пару минут спор появится в «Моих спорах», а о новых документах GitHub пришлёт уведомление. Поле ниже — чтобы разобрать карточку вручную, без отслеживания.</p>
-      <p class="hint srv nocld">Карточку загружает программа, запущенная на этом компьютере: она открывает ссылку в браузере без окна, как открыли бы вы, и забирает хронологию дела и тексты определений. Отслеживаемые споры хранятся здесь же, в папке <b>data</b>, и перепроверяются по расписанию.</p>
+      <p class="hint off">Эта страница работает только с тем, что вы вставили: <b>сама она на kad.arbitr не ходит</b> и вставленное никуда не отправляет — разбор идёт в вашем браузере. Чтобы карточки загружались по ссылке и проверялись сами, установите расширение «Обособленный спор» — см. «Инструкцию».</p>
+      <p class="hint ext">Карточку загружает расширение в этом браузере: открывает её во вкладке, как открыли бы вы, и забирает хронологию дела. Отслеживаемые споры хранятся <b>только в этом браузере</b> и никуда не отправляются; расширение обращается только к kad.arbitr.ru.</p>
+      <p class="hint srv noext">Карточку загружает программа, запущенная на этом компьютере: она открывает ссылку в браузере без окна, как открыли бы вы, и забирает хронологию дела и тексты определений. Отслеживаемые споры хранятся здесь же, в папке <b>data</b>, и перепроверяются по расписанию.</p>
     </div>
 
     <details class="adv">
@@ -411,11 +430,12 @@ a.btn{text-decoration:none;display:inline-block}
   правила и расчёт сроков работают в браузере. Автосохранения нет — сохранённый файл спора
   вы получаете кнопкой «Сохранить спор», и он содержит персональные данные участников дела,
   поэтому храните его вместе с материалами дела.</p>
-  <p class="cld"><b>Где данные.</b> Карточки дел загружает и разбирает GitHub Actions этого репозитория,
-  результат лежит на сайте в папке <b>data</b>. Репозиторий открытый: список отслеживаемых споров и их
-  движение видны всем, как видны и сами карточки на kad.arbitr. Разбор и расчёт сроков на странице
-  идут в вашем браузере.</p>
-  <p class="srv nocld"><b>Где данные.</b> Разбор, правила и расчёт сроков работают в браузере; в сеть
+  <p class="ext"><b>Где данные.</b> Отслеживаемые споры, загруженные карточки и тексты определений
+  хранятся только в этом браузере, в хранилище расширения. Они никуда не отправляются: расширение
+  обращается только к kad.arbitr.ru — за карточками дел и текстами определений. У каждого
+  пользователя свой список. Чтобы перенести споры на другой компьютер, скачайте их файлом и
+  загрузите там. В файле персональные данные участников дела — храните его там же, где материалы дела.</p>
+  <p class="srv noext"><b>Где данные.</b> Разбор, правила и расчёт сроков работают в браузере; в сеть
   обращается только программа-сервер на этом компьютере, и только к kad.arbitr.ru — за карточкой
   дела и текстами определений. Споры хранятся в папке <b>data</b> рядом с программой и содержат
   персональные данные участников дела.</p>
@@ -440,12 +460,16 @@ a.btn{text-decoration:none;display:inline-block}
     <li><b>Страница карточки.</b> Откройте карточку на kad.arbitr.ru, нажмите Ctrl+A, затем
       Ctrl+C и вставьте в поле. Можно перетащить сохранённую страницу (.html, .mhtml).</li>
   </ul>
-  <p><b>Загрузка по ссылке</b> работает, когда программа запущена как сервер (<code>npm start</code>,
-  см. README): кнопка «Загрузить с kad.arbitr» открывает карточку в браузере без окна, забирает
-  хронологию дела и тексты определений из PDF. Страница без сервера — открытая файлом с диска
-  или с сайта на GitHub Pages — этого не может: kad.arbitr не разрешает другим сайтам читать
-  свои страницы, — тогда источник данных ваша вставка. Если kad.arbitr попросит пройти проверку «вы не робот», запустите сервер с
-  окном браузера (<code>npm run start:window</code>) и пройдите её один раз.</p>
+  <p><b>Загрузка по ссылке</b> работает в расширении браузера «Обособленный спор» (или в программе,
+  запущенной на компьютере как сервер, см. README): кнопка «Загрузить с kad.arbitr» открывает
+  карточку во вкладке этого же браузера, как открыли бы вы, и забирает хронологию дела. Страница,
+  открытая с сайта или файлом с диска, этого не может: kad.arbitr не разрешает другим сайтам читать
+  свои страницы, — тогда источник данных ваша вставка. Если kad.arbitr попросит пройти проверку «вы
+  не робот», расширение покажет вкладку картотеки: пройдите проверку, и загрузка продолжится.</p>
+  <p class="ext"><b>Установка расширения.</b> Скачайте архив расширения со страницы программы и
+  распакуйте его. В браузере откройте <code>chrome://extensions</code> (в Яндекс Браузере —
+  <code>browser://extensions</code>, в Edge — <code>edge://extensions</code>), включите «Режим
+  разработчика», нажмите «Загрузить распакованное расширение» и выберите распакованную папку.</p>
 
   <h4>2. Как из карточки выделяется спор</h4>
   <p>Картотека связывает документы с заявлением полем «В ответ на». Программа берёт
@@ -493,11 +517,11 @@ a.btn{text-decoration:none;display:inline-block}
   текстами и уточнениями; «Открыть спор» возвращает его обратно. Если вставить в открытый спор
   свежую карточку, новые документы будут помечены. В файле персональные данные участников
   дела — храните его там же, где материалы дела.</p>
-  <p class="cld">Спор на отслеживании — это задача (issue) в репозитории на GitHub с датой подачи и ссылкой на
-  карточку. GitHub проверяет карточки по расписанию, сразу после создания задачи и по комментарию
-  «проверить», пишет в задачу о новых документах и обновляет сайт. Закройте задачу — спор снят.
-  «Новое» на странице отмечается для каждого браузера отдельно.</p>
-  <p class="srv nocld">«Сохранить спор» ставит спор на отслеживание: он появляется в «Моих спорах», а сервер
+  <p class="ext">«Сохранить спор» ставит спор на отслеживание: он появляется в «Моих спорах», а
+  расширение перепроверяет карточку по расписанию, пока браузер открыт, и показывает уведомление
+  о новых документах. Документы, появившиеся с последнего просмотра, помечены «новое», а число
+  таких споров видно на значке расширения. Все данные — только в этом браузере.</p>
+  <p class="srv noext">«Сохранить спор» ставит спор на отслеживание: он появляется в «Моих спорах», а сервер
   перепроверяет карточку по расписанию. Документы, появившиеся с последнего просмотра,
   помечены «новое».</p>
 
@@ -2194,10 +2218,11 @@ a.btn{text-decoration:none;display:inline-block}
 /*
  * Логика страницы. Наружу ничего не выставляет.
  *
- * Режимов два. Страница без сервера (файл с диска, GitHub Pages) работает
- * только со вставкой и хранит спор в скачанном файле. Страница, которую отдаёт
- * локальный сервер (server.mjs), вдобавок загружает карточку по ссылке,
- * тексты определений из PDF и держит список отслеживаемых споров.
+ * Режимов три. Страница без хранилища (файл с диска, GitHub Pages) работает
+ * только со вставкой и хранит спор в скачанном файле. Страница расширения
+ * браузера и страница локального сервера (server.mjs) вдобавок загружают
+ * карточку по ссылке, тексты определений из PDF и держат список
+ * отслеживаемых споров — на устройстве пользователя, не где-то ещё.
  * Разбор, правила и сроки в обоих режимах одни и те же и считаются здесь,
  * в браузере; сервер только приносит данные и хранит их.
  */
@@ -2228,8 +2253,6 @@ a.btn{text-decoration:none;display:inline-block}
   let viewKnown = null;    // «новое» считается от того, что было известно при открытии
   let card = null;
   let dispute = null;
-  let server = null;       // ответ /api/ping, если страницу отдал сервер
-  let cloud = null;        // data/index.json, если споры проверяет GitHub Actions
   const opened = new Set();  // раскрытые события переживают перерисовку
 
   /* ---------- мелочи ---------- */
@@ -2325,13 +2348,13 @@ a.btn{text-decoration:none;display:inline-block}
     $('urlOpen').hidden = !m;
     if (m) $('urlOpen').href = `https://kad.arbitr.ru/Card/${m[1]}`;
     $('btnFetch').disabled = !m;
-    if (!v) echo('urlEcho', server ? 'Вставьте ссылку и нажмите «Загрузить с kad.arbitr»' : '');
+    if (!v) echo('urlEcho', backend ? 'Вставьте ссылку и нажмите «Загрузить с kad.arbitr»' : '');
     else if (!m) echo('urlEcho', 'Ожидается ссылка вида https://kad.arbitr.ru/Card/…', true);
     else echo('urlEcho', card && card.meta.caseNo ? `Дело ${card.meta.caseNo}` : 'Ссылка на карточку дела');
   }
   $('urlInput').addEventListener('input', readUrl);
   $('urlInput').addEventListener('change', () => { readUrl(); scheduleSave(); });
-  $('urlInput').addEventListener('keydown', (e) => { if (e.key === 'Enter' && server && KAD_URL.test(S.url)) fetchCard(); });
+  $('urlInput').addEventListener('keydown', (e) => { if (e.key === 'Enter' && backend && KAD_URL.test(S.url)) fetchCard(); });
 
   /* ---------- вставка и файлы ---------- */
 
@@ -2504,7 +2527,7 @@ a.btn{text-decoration:none;display:inline-block}
 
   function reportParse(d) {
     if (!S.card.raw.trim()) {
-      echo('pasteEcho', server ? 'Карточка ещё не загружена — нажмите «Загрузить с kad.arbitr»' : 'Карточка не вставлена — показано только то, что следует из даты подачи');
+      echo('pasteEcho', backend ? 'Карточка ещё не загружена — нажмите «Загрузить с kad.arbitr»' : 'Карточка не вставлена — показано только то, что следует из даты подачи');
       return;
     }
     const g = card.diagnostics;
@@ -2670,7 +2693,7 @@ a.btn{text-decoration:none;display:inline-block}
         <textarea data-text="${esc(r.id)}" placeholder="Вставьте текст судебного акта — программа найдёт сроки, дату заседания и поручения управляющему">${esc(S.texts[r.id] || '')}</textarea>
         <div class="acts noprint">
           <button class="btn btn-sm" data-act="text" data-id="${esc(r.id)}">Разобрать текст</button>
-          ${r.pdf ? `<button class="btn btn-sm srv nocld" data-act="pdf" data-id="${esc(r.id)}">Загрузить текст из PDF</button>` : ''}
+          ${r.pdf ? `<button class="btn btn-sm srv" data-act="pdf" data-id="${esc(r.id)}">Загрузить текст из PDF</button>` : ''}
           ${S.texts[r.id] ? `<button class="linkbtn" data-act="untext" data-id="${esc(r.id)}">убрать текст</button>` : ''}
         </div>
         ${e.ruling ? rulingHtml(e.ruling) : ''}`;
@@ -2784,14 +2807,81 @@ a.btn{text-decoration:none;display:inline-block}
     else delete S.texts[id];
   }
 
-  /* ---------- сервер: загрузка карточки и текстов ---------- */
+  /* ---------- где живут споры: сервер на компьютере или расширение ---------- */
 
+  /*
+   * Два хранилища с одним устройством. Сервер (server.mjs) — споры в папке
+   * data на компьютере, карточки загружает его браузер. Расширение — споры в
+   * chrome.storage этого браузера, карточки загружает фоновая часть
+   * расширения. И там и там данные остаются на устройстве пользователя;
+   * наружу идут только запросы к kad.arbitr.ru.
+   */
   async function api(path, opts) {
     const res = await fetch(path, { ...opts, headers: { 'Content-Type': 'application/json', ...(opts && opts.headers) } });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || `сервер ответил ${res.status}`);
     return data;
   }
+
+  const Http = {
+    kind: 'server',
+    info: null,
+    async init() {
+      if (!/^https?:$/.test(location.protocol)) return null;
+      const r = await fetch('/api/ping').catch(() => null);
+      if (!r || !r.ok) return null;
+      this.info = await r.json();
+      return this;
+    },
+    card: (url) => api('/api/fetch', { method: 'POST', body: JSON.stringify({ url }) }),
+    pdf: async (url) => (await api(`/api/pdf?url=${encodeURIComponent(url)}`)).text,
+    list: () => api('/api/disputes'),
+    get: (id) => api(`/api/disputes/${encodeURIComponent(id)}`),
+    async save(st) {
+      const body = JSON.stringify(st);
+      const r = st.id
+        ? await api(`/api/disputes/${encodeURIComponent(st.id)}`, { method: 'PUT', body })
+        : await api('/api/disputes', { method: 'POST', body });
+      return r.id;
+    },
+    remove: (id) => api(`/api/disputes/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+    refresh: (id) => api(`/api/disputes/${encodeURIComponent(id)}/refresh`, { method: 'POST' }),
+    note() {
+      const h = this.info && this.info.checkHours;
+      return h ? `сервер проверяет карточки каждые ${h} ч` : 'плановая проверка выключена';
+    }
+  };
+
+  const Ext = {
+    kind: 'ext',
+    settings: null,
+    async init() {
+      const c = globalThis.chrome;
+      if (!(c && c.runtime && c.runtime.id && c.storage && c.storage.local)) return null;
+      this.settings = await this.send({ type: 'settings' });
+      return this;
+    },
+    async send(msg) {
+      const r = await chrome.runtime.sendMessage(msg);
+      if (!r) throw new Error('расширение не ответило');
+      if (r.error) throw new Error(r.error);
+      return r;
+    },
+    card(url) { return this.send({ type: 'card', url }); },
+    async pdf(url) { return (await this.send({ type: 'pdf', url })).text; },
+    async list() { return (await this.send({ type: 'list' })).items; },
+    async get(id) { return (await this.send({ type: 'get', id })).state; },
+    // Сохраняет фоновая часть: там же поля проверки и сводка — одна запись на всех.
+    async save(st) { return (await this.send({ type: 'save', state: st })).id; },
+    remove(id) { return this.send({ type: 'remove', id }); },
+    refresh(id) { return this.send({ type: 'check', id }); },
+    note() {
+      const h = this.settings && this.settings.checkHours;
+      return h ? `карточки проверяются каждые ${h} ч, пока открыт браузер` : 'плановая проверка выключена';
+    }
+  };
+
+  let backend = null;
 
   $('btnFetch').addEventListener('click', fetchCard);
 
@@ -2801,7 +2891,7 @@ a.btn{text-decoration:none;display:inline-block}
     const done = busy($('btnFetch'), 'Загружаю…');
     echo('pasteEcho', 'Открываю карточку на kad.arbitr.ru — обычно это занимает 10–60 секунд…');
     try {
-      const r = await api('/api/fetch', { method: 'POST', body: JSON.stringify({ url: S.url }) });
+      const r = await backend.card(S.url);
       setCard(r.text, false, r.source || 'kad.arbitr', r.at);
       run();
       if (r.note) toast(r.note);
@@ -2815,7 +2905,8 @@ a.btn{text-decoration:none;display:inline-block}
 
   /** Тексты судебных актов спора, которых ещё нет, — по одному, чтобы не частить. */
   async function loadActs() {
-    if (!server || !dispute) return;
+    if (!backend || !dispute) return;
+    if (backend.kind === 'ext' && !(backend.settings && backend.settings.pdfTexts)) return;
     const mine = S;
     const todo = dispute.events.filter((e) => isAct(e) && e.rec.pdf && !S.texts[e.rec.id]);
     let n = 0;
@@ -2825,8 +2916,8 @@ a.btn{text-decoration:none;display:inline-block}
       n++;
       echo('pasteEcho', `Загружаю тексты определений: ${n} из ${todo.length}…`);
       try {
-        const r = await api(`/api/pdf?url=${encodeURIComponent(e.rec.pdf)}`);
-        if (r.text) mine.texts[e.rec.id] = r.text;
+        const text = await backend.pdf(e.rec.pdf);
+        if (text) mine.texts[e.rec.id] = text;
       } catch (err) {
         toast(`Текст от ${D.fmt(e.rec.date)} не загружен: ${err.message}`);
       }
@@ -2836,12 +2927,12 @@ a.btn{text-decoration:none;display:inline-block}
 
   async function loadPdf(id, btn) {
     const e = dispute && dispute.events.find((x) => x.rec.id === id);
-    if (!e || !e.rec.pdf) return;
+    if (!e || !e.rec.pdf || !backend) return;
     const done = busy(btn, 'Загружаю…');
     try {
-      const r = await api(`/api/pdf?url=${encodeURIComponent(e.rec.pdf)}`);
-      if (!r.text) throw new Error('в PDF нет текстового слоя — это скан');
-      S.texts[id] = r.text;
+      const text = await backend.pdf(e.rec.pdf);
+      if (!text) throw new Error('в PDF нет текстового слоя — это скан');
+      S.texts[id] = text;
       opened.add(id);
       run();
     } catch (err) {
@@ -2864,8 +2955,7 @@ a.btn{text-decoration:none;display:inline-block}
   function openState(obj) {
     if (!obj || obj.app !== 'kadmonitoring') throw new Error('это не файл спора');
     S = { ...blank(), ...obj, card: { ...blank().card, ...(obj.card || {}) } };
-    delete S.summary;
-    delete S.savedAt;
+    for (const k of ['summary', 'savedAt', 'checkedAt', 'error', 'note', 'notified', 'createdAt']) delete S[k];
     viewKnown = S.known ? [...S.known] : null;
     opened.clear();
     fillInputs();
@@ -2879,18 +2969,19 @@ a.btn{text-decoration:none;display:inline-block}
     return `Спор ${no} от ${S.filed ? D.fmt(S.filed) : 'без даты'}.json`.replace(/[\\/:*?"<>|]/g, '-');
   }
 
+  function download(obj, name) {
+    const blob = new Blob([JSON.stringify(obj, null, 1)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
+
   $('btnSave').addEventListener('click', async () => {
-    if (!server) {
-      const blob = new Blob([JSON.stringify(snapshot(), null, 1)], { type: 'application/json' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = fileName();
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-      return;
-    }
+    if (!backend) { download(snapshot(), fileName()); return; }
     try {
-      await saveServer();
+      await saveTracked();
       toast('Спор сохранён и отслеживается');
     } catch (err) { toast(`Не сохранено: ${err.message}`); }
   });
@@ -2900,28 +2991,37 @@ a.btn{text-decoration:none;display:inline-block}
     const f = e.target.files[0];
     e.target.value = '';
     if (!f) return;
-    try { openState(JSON.parse(await f.text())); } catch (err) { toast(`Не открыт: ${err.message}`); }
+    try {
+      const obj = JSON.parse(await f.text());
+      // Файл из «Скачать все споры» — несколько споров сразу.
+      if (backend && obj && Array.isArray(obj.disputes)) {
+        for (const st of obj.disputes) await backend.save({ ...st, id: null });
+        toast(`Загружено споров: ${obj.disputes.length}`);
+        showList();
+        return;
+      }
+      if (backend) showForm();
+      openState(obj);
+      if (backend) { S.id = null; await saveTracked(); }
+    } catch (err) { toast(`Не открыт: ${err.message}`); }
   });
 
-  async function saveServer() {
-    const body = JSON.stringify(snapshot());
-    const r = S.id
-      ? await api(`/api/disputes/${encodeURIComponent(S.id)}`, { method: 'PUT', body })
-      : await api('/api/disputes', { method: 'POST', body });
-    S.id = r.id;
+  async function saveTracked() {
+    S.id = await backend.save(snapshot());
     if (location.hash !== `#d=${S.id}`) history.replaceState(null, '', `#d=${S.id}`);
-    $('btnSave').textContent = 'Сохранить спор';
   }
 
-  /* Отслеживаемый спор на сервере сохраняется сам — после каждого изменения. */
+  /* Отслеживаемый спор сохраняется сам — после каждого изменения. */
   let saveTimer = 0;
   function scheduleSave() {
-    if (!server || !S.id) return;
+    if (!backend || !S.id) return;
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => saveServer().catch((err) => toast(`Не сохранено: ${err.message}`)), 700);
+    saveTimer = setTimeout(() => saveTracked().catch((err) => toast(`Не сохранено: ${err.message}`)), 700);
   }
 
   /* ---------- список споров ---------- */
+
+  const when = (iso) => new Date(iso).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
   function showForm() {
     $('listSec').hidden = true;
@@ -2938,26 +3038,16 @@ a.btn{text-decoration:none;display:inline-block}
     history.replaceState(null, '', location.pathname);
     $('list').innerHTML = '<div class="note">Загружаю список…</div>';
     try {
-      const items = cloud ? (await loadCloudIndex()).items : await api('/api/disputes');
-      renderList(items);
+      renderList(await backend.list());
     } catch (err) {
       $('list').innerHTML = `<div class="note warn">Список не загружен: ${esc(err.message)}</div>`;
     }
   }
 
   function renderList(items) {
-    if (cloud) {
-      $('listNote').textContent = `проверяет GitHub${cloud.schedule ? ': ' + cloud.schedule : ''}` +
-        (cloud.updatedAt ? ` · обновлено ${when(cloud.updatedAt)}` : '');
-      $('linkRunAll').href = `https://github.com/${cloud.repo}/actions/workflows/monitor.yml`;
-    } else {
-      const hours = server && server.checkHours;
-      $('listNote').textContent = hours ? `сервер проверяет карточки каждые ${hours} ч` : 'плановая проверка выключена';
-    }
+    $('listNote').textContent = backend.note();
     if (!items.length) {
-      $('list').innerHTML = cloud
-        ? '<div class="note">Отслеживаемых споров пока нет. Нажмите «Новый спор», укажите дату подачи и ссылку на карточку и нажмите «Отслеживать на GitHub».</div>'
-        : '<div class="note">Отслеживаемых споров пока нет. Нажмите «Новый спор», укажите дату подачи и ссылку на карточку, загрузите её и нажмите «Сохранить спор».</div>';
+      $('list').innerHTML = '<div class="note">Отслеживаемых споров пока нет. Нажмите «Новый спор», укажите дату подачи и ссылку на карточку, нажмите «Загрузить с kad.arbitr» и «Сохранить спор».</div>';
       return;
     }
     $('list').innerHTML = items.map((it) => {
@@ -2972,11 +3062,9 @@ a.btn{text-decoration:none;display:inline-block}
         <div><span class="s">${esc(hearing)}</span>
           <span class="s ${s.overdue ? 'acc' : ''}">${s.overdue ? `истекло сроков: ${s.overdue} · ` : ''}${esc(next.slice(0, 120))}</span>
           <span class="s">${it.checkedAt ? `проверено ${when(it.checkedAt)}` : 'ещё не проверялось'}${it.error ? ` · <span style="color:var(--acc)">${esc(it.error)}</span>` : ''}</span></div>
-        <div class="r">${cloud
-          ? `<a class="btn btn-sm" href="https://github.com/${esc(cloud.repo)}/issues/${esc(it.issue)}" target="_blank" rel="noopener noreferrer">задача #${esc(it.issue)}</a>`
-          : `${s.newEvents ? `<span class="b new">новое: ${s.newEvents}</span>` : ''}
+        <div class="r">${s.newEvents ? `<span class="b new">новое: ${s.newEvents}</span>` : ''}
           <button class="btn btn-sm" data-check="${esc(it.id)}">Проверить</button>
-          <button class="linkbtn" data-del="${esc(it.id)}">удалить</button>`}</div>
+          <button class="linkbtn" data-del="${esc(it.id)}">удалить</button></div>
       </div>`;
     }).join('');
   }
@@ -2988,26 +3076,25 @@ a.btn{text-decoration:none;display:inline-block}
     const row = e.target.closest('[data-open]');
     if (chk) {
       const done = busy(chk, 'Проверяю…');
-      try { await api(`/api/disputes/${encodeURIComponent(chk.dataset.check)}/refresh`, { method: 'POST' }); await showList(); }
+      try { await backend.refresh(chk.dataset.check); await showList(); }
       catch (err) { toast(err.message); done(); }
       return;
     }
     if (del) {
       if (!confirm('Удалить спор из отслеживания? Сохранённые данные будут удалены.')) return;
-      try { await api(`/api/disputes/${encodeURIComponent(del.dataset.del)}`, { method: 'DELETE' }); await showList(); }
+      try { await backend.remove(del.dataset.del); await showList(); }
       catch (err) { toast(err.message); }
       return;
     }
-    if (row) openFromServer(row.dataset.open);
+    if (row) openTracked(row.dataset.open);
   });
 
-  async function openFromServer(id) {
+  async function openTracked(id) {
     try {
-      const obj = cloud ? await cloudDispute(id) : await api(`/api/disputes/${encodeURIComponent(id)}`);
+      const obj = await backend.get(id);
       showForm();
       openState(obj);
-      if (cloud) remember(id, S.known);
-      history.replaceState(null, '', `#${cloud ? 'c' : 'd'}=${id}`);
+      history.replaceState(null, '', `#d=${id}`);
       scheduleSave();
     } catch (err) {
       toast(`Спор не открыт: ${err.message}`);
@@ -3025,7 +3112,6 @@ a.btn{text-decoration:none;display:inline-block}
     fillInputs();
     echo('pasteEcho', '');
     $('result').hidden = true;
-    $('btnSave').textContent = 'Сохранить спор';
     showForm();
     history.replaceState(null, '', location.pathname);
     dateInput.focus();
@@ -3033,66 +3119,52 @@ a.btn{text-decoration:none;display:inline-block}
   $('btnCheckAll').addEventListener('click', async (e) => {
     const done = busy(e.target, 'Проверяю…');
     try {
-      const items = await api('/api/disputes');
+      const items = await backend.list();
       for (const it of items) {
         e.target.textContent = `Проверяю ${items.indexOf(it) + 1} из ${items.length}…`;
-        try { await api(`/api/disputes/${encodeURIComponent(it.id)}/refresh`, { method: 'POST' }); }
+        try { await backend.refresh(it.id); }
         catch (err) { toast(`${(it.summary && it.summary.caseNo) || it.id}: ${err.message}`); }
       }
     } finally { done(); showList(); }
   });
 
-  /* ---------- облако: споры проверяет GitHub Actions ---------- */
+  /* Резервная копия: все споры одним файлом — перенести на другое устройство. */
+  $('btnExport').addEventListener('click', async () => {
+    try {
+      const items = await backend.list();
+      const disputes = [];
+      for (const it of items) disputes.push(await backend.get(it.id));
+      download({ app: 'kadmonitoring', v: 1, exportedAt: new Date().toISOString(), disputes },
+        `Обособленные споры ${D.fmt(D.today())}.json`);
+    } catch (err) { toast(`Не выгружено: ${err.message}`); }
+  });
+  $('btnImport').addEventListener('click', () => $('fileJson').click());
 
-  const when = (iso) => new Date(iso).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  /* ---------- настройки расширения ---------- */
 
-  /* Сводку публикует tools/cloud-check.mjs рядом со страницей. */
-  async function loadCloudIndex() {
-    if (!/^https?:$/.test(location.protocol)) throw new Error('страница открыта с диска');
-    const r = await fetch('data/index.json', { cache: 'no-store' });
-    if (!r.ok) throw new Error(`data/index.json: ${r.status}`);
-    const j = await r.json();
-    if (!j || j.app !== 'kadmonitoring') throw new Error('это не сводка споров');
-    cloud = j;
-    return j;
+  function renderSettings() {
+    if (!backend || backend.kind !== 'ext') return;
+    const st = backend.settings || {};
+    $('setHours').value = String(st.checkHours || 0);
+    $('setNotify').checked = !!st.notify;
+    $('setPdf').checked = !!st.pdfTexts;
   }
-
-  async function cloudDispute(id) {
-    if (!/^\d+$/.test(String(id))) throw new Error('нет такого спора');
-    const r = await fetch(`data/${id}.json`, { cache: 'no-store' });
-    if (!r.ok) throw new Error(`спор не найден (${r.status})`);
-    const obj = await r.json();
-    // «Новое» — относительно того, что видел этот браузер; хранится в нём же.
-    obj.known = seenIn(id);
-    return obj;
+  async function saveSettings(patch) {
+    backend.settings = await backend.send({ type: 'settings', set: patch });
+    renderSettings();
+    $('listNote').textContent = backend.note();
   }
-
-  function seenIn(id) {
-    try { const v = JSON.parse(localStorage.getItem(`kad-seen-${id}`) || 'null'); return Array.isArray(v) ? v : null; }
-    catch (_) { return null; }
-  }
-  function remember(id, ids) {
-    try { if (ids) localStorage.setItem(`kad-seen-${id}`, JSON.stringify(ids)); } catch (_) { /* приватный режим */ }
-  }
-
-  /* Поставить спор на отслеживание: готовая задача на GitHub, её остаётся отправить. */
-  $('btnTrack').addEventListener('click', () => {
-    readDate();
-    readUrl();
-    if (!S.filed) { toast('Укажите дату подачи заявления'); dateInput.focus(); return; }
-    if (!KAD_URL.test(S.url)) { toast('Нужна ссылка на карточку kad.arbitr.ru'); $('urlInput').focus(); return; }
-    const role = S.role === 'applicant' ? 'заявитель' : S.role === 'participant' ? 'участник' : '(необязательно: заявитель или участник)';
-    const title = `Спор: заявление от ${D.fmt(S.filed)}${card && card.meta.caseNo ? `, дело ${card.meta.caseNo}` : ''}`;
-    const body = [
-      `Дата подачи: ${D.fmt(S.filed)}`,
-      `Ссылка: ${S.url.match(KAD_URL)[0]}`,
-      `Заявитель: ${S.applicant || '(необязательно)'}`,
-      `Роль управляющего: ${role}`,
-      '',
-      'Эта задача — отслеживаемый спор. Карточка проверяется по расписанию, о новых документах появится комментарий. Чтобы проверить сейчас, напишите «проверить». Закройте задачу, чтобы снять спор с отслеживания.'
-    ].join('\n');
-    window.open(`https://github.com/${cloud.repo}/issues/new?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`, '_blank', 'noopener');
-    echo('pasteEcho', 'Отправьте задачу на GitHub («Submit new issue»). Через 1–3 минуты спор появится в «Моих спорах», а в задаче — первый отчёт.');
+  $('setHours').addEventListener('change', (e) => saveSettings({ checkHours: +e.target.value }));
+  $('setNotify').addEventListener('change', (e) => saveSettings({ notify: e.target.checked }));
+  $('setPdf').addEventListener('change', async (e) => {
+    // Тексты определений картотека отдаёт только браузеру, прошедшему её
+    // проверку; расширение читает их через отладчик вкладки — это отдельное
+    // разрешение, и браузер спросит его сам.
+    if (e.target.checked) {
+      const ok = await chrome.permissions.request({ permissions: ['debugger'] }).catch(() => false);
+      if (!ok) { e.target.checked = false; toast('Без разрешения тексты определений загружаться не будут'); return; }
+    }
+    saveSettings({ pdfTexts: e.target.checked });
   });
 
   /* ---------- прочее ---------- */
@@ -3110,22 +3182,14 @@ a.btn{text-decoration:none;display:inline-block}
   window.addEventListener('afterprint', () => { printOpen.forEach((d) => { d.open = false; }); printOpen = []; });
 
   async function init() {
-    if (/^https?:$/.test(location.protocol)) {
-      try {
-        const r = await fetch('/api/ping');
-        if (r.ok) server = await r.json();
-      } catch (_) { server = null; }
-    }
-    if (!server) {
-      try { await loadCloudIndex(); } catch (_) { cloud = null; }
-    }
-    document.body.classList.toggle('server', !!(server || cloud));
-    document.body.classList.toggle('cloud', !!cloud);
+    backend = await Ext.init().catch(() => null) || await Http.init().catch(() => null);
+    document.body.classList.toggle('server', !!backend);
+    document.body.classList.toggle('ext', !!backend && backend.kind === 'ext');
     readUrl();
-    if (!server && !cloud) return;
-    $('btnSave').textContent = 'Сохранить спор';
-    const m = location.hash.match(/^#[dc]=([\w-]+)$/);
-    if (m) openFromServer(m[1]);
+    if (!backend) return;
+    renderSettings();
+    const m = location.hash.match(/^#d=([\w-]+)$/);
+    if (m) openTracked(m[1]);
     else showList();
   }
 
