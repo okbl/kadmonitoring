@@ -198,8 +198,43 @@ dialog::backdrop{background:rgba(43,45,49,.42)}
 footer{padding:34px 0 46px;font-size:12px;color:var(--ink-3);line-height:1.6}
 footer b{color:var(--ink-2)}
 
+/* ---------- два режима: файл с диска и локальный сервер ---------- */
+body:not(.server) .srv{display:none!important}
+body.server .off{display:none!important}
+.urlrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.urlrow input{flex:1 1 260px;min-width:0}
+.btn.busy{opacity:.7;cursor:progress}
+a.btn{text-decoration:none;display:inline-block}
+
+/* ---------- список отслеживаемых споров ---------- */
+.list{padding:22px 0 0}
+.list .lhead{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.list .lhead h3{font-size:15px;margin-right:auto}
+.drow{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1.1fr) minmax(0,1.5fr) auto;gap:16px;align-items:center;
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r-sm);padding:13px 16px;margin-bottom:8px;
+  cursor:pointer;box-shadow:var(--shadow);transition:border-color .15s}
+.drow:hover{border-color:var(--ink-3)}
+.drow b{display:block;font-size:14px;font-weight:600;letter-spacing:-.01em}
+.drow .s{display:block;font-size:12px;color:var(--ink-3);margin-top:3px;line-height:1.4}
+.drow .s.acc{color:var(--acc);font-weight:600}
+.drow .r{display:flex;gap:6px;align-items:center;justify-content:flex-end}
+@media (max-width:760px){.drow{grid-template-columns:1fr}.drow .r{justify-content:flex-start}}
+.pill{display:inline-block;font-size:12px;font-weight:600;border-radius:999px;padding:2px 10px;border:1px solid var(--line-2)}
+.pill.ok{color:var(--ok);background:var(--ok-wash);border-color:var(--ok-line)}
+.pill.bad{color:var(--acc);background:var(--acc-wash);border-color:var(--acc-line)}
+.pill.warn{color:var(--warn);background:var(--warn-wash);border-color:var(--warn-line)}
+.pill.neutral{color:var(--ink-2);background:var(--bg)}
+.b.new{border-color:var(--acc);background:var(--acc);color:#FBF9F6;font-weight:600}
+.task.done{border-left-color:var(--ok-line);opacity:.8}
+.task .donebox{margin-top:7px;font-size:12.5px;color:var(--ok);font-weight:500}
+.rul{margin:6px 0 0;padding-left:18px;font-size:12.5px;color:var(--ink-2);line-height:1.5}
+.rul li{margin:3px 0}
+.ev .acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
+.ev .detail a{color:var(--acc)}
+.cand{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;padding:4px 0}
+
 @media print{
-  .top .act,.ask,.noprint,#toast{display:none!important}
+  .top .act,.ask,.noprint,#toast,#listSec{display:none!important}
   body{background:#fff}
   .t,.task,.note{box-shadow:none;break-inside:avoid}
   .hero{background:#fff!important;color:var(--ink);border:1px solid var(--line-2)}
@@ -221,8 +256,9 @@ footer b{color:var(--ink-2)}
       <div class="who" id="caseLine">оспаривание сделки должника — движение по карточке kad.arbitr</div>
     </div>
     <div class="act">
+      <button class="btn srv" id="btnList">Мои споры</button>
       <button class="btn" id="btnHelp">Инструкция</button>
-      <button class="btn" id="btnOpen">Открыть спор</button>
+      <button class="btn off" id="btnOpen">Открыть спор</button>
       <button class="btn" id="btnSave" disabled>Сохранить спор</button>
       <button class="btn pri" id="btnPrint" disabled>Печать / PDF</button>
       <input type="file" id="fileJson" accept=".json,application/json" hidden>
@@ -230,7 +266,19 @@ footer b{color:var(--ink-2)}
   </div>
 </header>
 
-<section class="ask">
+<section class="page srv" id="listSec" hidden>
+  <div class="list">
+    <div class="lhead">
+      <h3>Отслеживаемые споры</h3>
+      <span class="m" id="listNote"></span>
+      <button class="btn btn-sm" id="btnCheckAll">Проверить все</button>
+      <button class="btn btn-sm pri" id="btnNew">Новый спор</button>
+    </div>
+    <div id="list"></div>
+  </div>
+</section>
+
+<section class="ask" id="askSec">
   <div class="page in">
     <div class="line">
       <div>
@@ -247,20 +295,25 @@ footer b{color:var(--ink-2)}
       </div>
       <div class="grow">
         <label class="lb" for="urlInput">Ссылка на карточку дела</label>
-        <input id="urlInput" type="url" placeholder="https://kad.arbitr.ru/Card/…" autocomplete="off" spellcheck="false">
+        <div class="urlrow">
+          <input id="urlInput" type="url" placeholder="https://kad.arbitr.ru/Card/…" autocomplete="off" spellcheck="false">
+          <button class="btn pri srv" id="btnFetch" type="button">Загрузить с kad.arbitr</button>
+          <a class="btn btn-sm" id="urlOpen" target="_blank" rel="noopener noreferrer" hidden>Открыть карточку</a>
+        </div>
         <div class="echo" id="urlEcho"></div>
       </div>
     </div>
 
     <div class="drop" id="drop">
-      <label class="lb" for="paste">Страница карточки</label>
+      <label class="lb" for="paste"><span class="off">Страница карточки</span><span class="srv">Страница карточки — загружается по ссылке; вставьте вручную, если загрузка не удалась</span></label>
       <textarea id="paste" placeholder="Откройте карточку дела на kad.arbitr.ru, выделите страницу (Ctrl+A), скопируйте (Ctrl+C) и вставьте сюда (Ctrl+V). Либо перетащите в это поле сохранённую страницу — .html или .mhtml."></textarea>
       <div class="row">
         <button class="btn pri" id="btnParse">Разобрать</button>
         <button class="btn btn-sm" id="btnClear">Очистить</button>
         <span class="echo" id="pasteEcho"></span>
       </div>
-      <p class="hint">Программа работает только с тем, что вы вставили: <b>сама она на kad.arbitr не ходит</b> и в сеть ничего не отправляет. Данные остаются в этой странице до закрытия и сохраняются только в файл, который вы скачаете.</p>
+      <p class="hint off">Страница открыта файлом с диска, поэтому работает только с тем, что вы вставили: <b>сама она на kad.arbitr не ходит</b> и в сеть ничего не отправляет. Чтобы карточка загружалась по ссылке и споры проверялись сами, запустите программу как сервер — см. «Инструкцию».</p>
+      <p class="hint srv">Карточку загружает программа, запущенная на этом компьютере: она открывает ссылку в браузере без окна, как открыли бы вы, и забирает хронологию дела и тексты определений. Отслеживаемые споры хранятся здесь же, в папке <b>data</b>, и перепроверяются по расписанию.</p>
     </div>
 
     <details class="adv">
@@ -327,8 +380,9 @@ footer b{color:var(--ink-2)}
 
 <div class="page" id="empty">
   <div class="note" style="margin-top:24px">
-    <b>С чего начать.</b> Укажите дату, когда подано заявление об оспаривании сделки, и вставьте
-    страницу карточки дела. Программа найдёт в ней именно этот обособленный спор — по полю
+    <b>С чего начать.</b> Укажите дату, когда подано заявление об оспаривании сделки, и
+    <span class="srv">ссылку на карточку дела — нажмите «Загрузить с kad.arbitr».</span><span class="off">вставьте
+    страницу карточки дела.</span> Программа найдёт в ней именно этот обособленный спор — по полю
     «В ответ на», которым картотека связывает документы с заявлением, — покажет его движение,
     текущую стадию и то, что требуется от финансового управляющего, со ссылками на нормы и
     расчётом сроков.
@@ -336,10 +390,14 @@ footer b{color:var(--ink-2)}
 </div>
 
 <footer class="page">
-  <p><b>Данные не покидают устройство.</b> Страница ничего не отправляет в сеть: разбор,
+  <p class="off"><b>Данные не покидают устройство.</b> Страница ничего не отправляет в сеть: разбор,
   правила и расчёт сроков работают в браузере. Автосохранения нет — сохранённый файл спора
   вы получаете кнопкой «Сохранить спор», и он содержит персональные данные участников дела,
   поэтому храните его вместе с материалами дела.</p>
+  <p class="srv"><b>Где данные.</b> Разбор, правила и расчёт сроков работают в браузере; в сеть
+  обращается только программа-сервер на этом компьютере, и только к kad.arbitr.ru — за карточкой
+  дела и текстами определений. Споры хранятся в папке <b>data</b> рядом с программой и содержат
+  персональные данные участников дела.</p>
   <p><b>Выводы программы — не юридическая консультация.</b> Стадия и перечень действий выведены
   из названий документов карточки и, если он вставлен, текста определения. Читайте определение:
   суд формулирует требования своими словами, и правила не заменяют первоисточник.</p>
@@ -361,9 +419,12 @@ footer b{color:var(--ink-2)}
     <li><b>Страница карточки.</b> Откройте карточку на kad.arbitr.ru, нажмите Ctrl+A, затем
       Ctrl+C и вставьте в поле. Можно перетащить сохранённую страницу (.html, .mhtml).</li>
   </ul>
-  <p>Загрузить карточку по одной ссылке страница не может: kad.arbitr не разрешает другим
-  сайтам читать свои страницы (браузер блокирует такой запрос), а автоматические обращения
-  отсекает проверкой «вы не робот». Поэтому источник данных — ваша вставка.</p>
+  <p><b>Загрузка по ссылке</b> работает, когда программа запущена как сервер (<code>npm start</code>,
+  см. README): кнопка «Загрузить с kad.arbitr» открывает карточку в браузере без окна, забирает
+  хронологию дела и тексты определений из PDF. Страница, открытая файлом с диска, этого не
+  может: kad.arbitr не разрешает другим сайтам читать свои страницы, — тогда источник данных
+  ваша вставка. Если kad.arbitr попросит пройти проверку «вы не робот», запустите сервер с
+  окном браузера (<code>npm run start:window</code>) и пройдите её один раз.</p>
 
   <h4>2. Как из карточки выделяется спор</h4>
   <p>Картотека связывает документы с заявлением полем «В ответ на». Программа берёт
@@ -396,14 +457,24 @@ footer b{color:var(--ink-2)}
 
   <h4>5. Текст определения</h4>
   <p>Названия документа не всегда достаточно: срок устранения недостатков, дата заседания и
-  поручения суда есть только в тексте. Раскройте событие в движении спора и вставьте текст
-  определения — программа найдёт резолютивную часть, сроки, дату заседания и адресные
-  требования, и покажет их вместе с исходной фразой, чтобы вывод можно было проверить.</p>
+  поручения суда есть только в тексте. Сервер загружает текст определений спора из PDF сам;
+  без сервера раскройте событие в движении спора и вставьте текст. Программа найдёт
+  резолютивную часть, сроки, дату заседания и адресные требования и покажет их вместе с
+  исходной фразой, чтобы вывод можно было проверить.</p>
 
-  <h4>6. Хранение</h4>
-  <p>Автосохранения нет. «Сохранить спор» даёт файл <code>.json</code> с датами, вставленными
-  текстами и уточнениями; «Открыть спор» возвращает его обратно. В файле персональные данные
-  участников дела — храните его там же, где материалы дела.</p>
+  <h4>6. Если спор выделен неверно</h4>
+  <p>Документ из «Возможно относится» можно включить в спор, а лишний — исключить; корневое
+  заявление можно выбрать в «Проверке разбора». Исправления сохраняются вместе со спором и
+  переживают обновление карточки.</p>
+
+  <h4>7. Хранение и проверка обновлений</h4>
+  <p class="off">Автосохранения нет. «Сохранить спор» даёт файл <code>.json</code> с датами, вставленными
+  текстами и уточнениями; «Открыть спор» возвращает его обратно. Если вставить в открытый спор
+  свежую карточку, новые документы будут помечены. В файле персональные данные участников
+  дела — храните его там же, где материалы дела.</p>
+  <p class="srv">«Сохранить спор» ставит спор на отслеживание: он появляется в «Моих спорах», а сервер
+  перепроверяет карточку по расписанию. Документы, появившиеся с последнего просмотра,
+  помечены «новое».</p>
 
   <div class="close"><button class="btn pri" id="helpClose">Понятно</button></div>
 </div></dialog>

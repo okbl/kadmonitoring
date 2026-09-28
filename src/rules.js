@@ -32,8 +32,10 @@
     denied: { label: 'В удовлетворении отказано', tone: 'bad', note: 'Нужно решить вопрос об обжаловании' },
     terminated: { label: 'Производство прекращено', tone: 'bad', note: 'Спор окончен без рассмотрения по существу' },
     unconsidered: { label: 'Оставлено без рассмотрения', tone: 'bad', note: 'Спор окончен без рассмотрения по существу' },
-    appeal: { label: 'Апелляция', tone: 'neutral', note: 'Судебный акт обжалуется' },
-    cassation: { label: 'Кассация', tone: 'neutral', note: 'Судебный акт обжалуется' },
+    appeal: { label: 'Апелляция', tone: 'neutral', note: 'Определение обжалуется в апелляционном суде' },
+    appealDone: { label: 'Апелляция рассмотрена', tone: 'neutral', note: 'Постановление апелляции вступает в силу со дня принятия' },
+    cassation: { label: 'Кассация', tone: 'neutral', note: 'Судебные акты обжалуются в суде округа' },
+    cassationDone: { label: 'Кассация рассмотрена', tone: 'neutral', note: 'Проверьте, не направлен ли спор на новое рассмотрение' },
     execution: { label: 'Исполнение', tone: 'ok', note: 'Судебный акт вступил в силу' }
   };
 
@@ -95,58 +97,120 @@
     { nature: 'protocol', re: /^протокол/ },
     { nature: 'application', re: /^заявлени/ },
     { nature: 'motion', re: /^ходатайств/ },
-    { nature: 'response', re: /^(?:отзыв|возражени)/ },
+    { nature: 'response', re: /^(?:отзыв|возражени|мнени)/ },
+    { nature: 'filing', re: /^(?:дополнени|дополнительн|пояснени|письменн|иные\s+документ|документ|уведомлени|письм|позици)/ },
     { nature: 'writ', re: /исполнительн[а-яё]*\s+лист/ }
   ];
 
-  /* Предмет судебного акта. Порядок важен: узкое выше общего. */
+  /*
+   * Предмет судебного акта. Порядок здесь главное, и он не «от узкого к
+   * общему», а «процессуальное раньше итогового». Содержание определения
+   * почти всегда называет предмет заявления: «О принятии к производству
+   * заявления о признании сделки недействительной», «Об отложении
+   * рассмотрения заявления о признании сделки недействительной». Стоят
+   * итоговые правила выше — оба определения становятся «сделка признана
+   * недействительной». Итог опознаётся по словам самого итога.
+   *
+   * Каждое правило понимает и заголовок картотеки («Об отложении…»), и
+   * резолютивную часть («Отложить судебное заседание…»).
+   */
   const RULING_KINDS = [
-    { kind: 'noMovement', re: /оставлени[а-яё]*\s+(?:заявлени|жалоб)[а-яё]*\s+без\s+движения|без\s+движения/, doc: 'Определение об оставлении без движения', stage: 'noMovement' },
-    { kind: 'unconsidered', re: /без\s+рассмотрения/, doc: 'Определение об оставлении без рассмотрения', stage: 'unconsidered' },
+    { kind: 'correctionRuling', re: /исправлени[а-яё]*\s+(?:опечатк|описк|ошибк|арифметическ)|исправить\s+(?:опечатк|описк)|разъяснени[а-яё]*\s+(?:определени|судебного)/, doc: 'Определение об исправлении опечатки', stage: null },
+    { kind: 'securing', re: /обеспечительн[а-яё]*\s+мер/, doc: 'Определение по обеспечительным мерам', stage: null },
+    { kind: 'motionDenied', re: /отказ[а-яё]*\s+в\s+удовлетворении\s+ходатайств/, doc: 'Определение об отказе в удовлетворении ходатайства', stage: null },
+    { kind: 'noMovement', re: /продлени[а-яё]*\s+срок[а-яё]*\s+(?:оставлени|устранени)|продлить\s+срок\s+(?:оставлени|устранени)/, doc: 'Определение о продлении срока без движения', stage: 'noMovement' },
+    { kind: 'noMovement', re: /без\s+движени/, doc: 'Определение об оставлении без движения', stage: 'noMovement' },
+    { kind: 'unconsidered', re: /без\s+рассмотрени/, doc: 'Определение об оставлении без рассмотрения', stage: 'unconsidered' },
     { kind: 'refusedAccept', re: /отказ[а-яё]*\s+в\s+принятии/, doc: 'Определение об отказе в принятии', stage: 'refused' },
-    { kind: 'returned', re: /(?:возвращени|возврат)[а-яё]*\s+(?:заявлени|жалоб)/, doc: 'Определение о возвращении заявления', stage: 'returned' },
-    { kind: 'terminated', re: /прекращени[а-яё]*\s+производств/, doc: 'Определение о прекращении производства', stage: 'terminated' },
-    { kind: 'denied', re: /отказ[а-яё]*\s+в\s+удовлетворении|отказать\s+в\s+удовлетворении/, doc: 'Определение об отказе в удовлетворении', stage: 'denied' },
-    { kind: 'partly', re: /частичн[а-яё]*[\s\S]{0,40}удовлетвор|удовлетвор[а-яё]*[\s\S]{0,40}частичн|в\s+части\s+удовлетвор|удовлетворени[а-яё]*\s+заявлени[а-яё]*\s+в\s+части/, doc: 'Определение о частичном удовлетворении', stage: 'partly' },
-    { kind: 'granted', re: /признани[а-яё]*\s+сделки\s+недействительн|признать\s+сделку\s+недействительн|удовлетворени[а-яё]*\s+заявлени|применени[а-яё]*\s+последствий\s+недействительн/, doc: 'Определение об удовлетворении заявления', stage: 'granted' },
-    { kind: 'accepted', re: /принятии\s+(?:к\s+производству|заявлени|к\s+рассмотрению)|приняти[а-яё]*\s+заявлени[а-яё]*\s+к\s+производству/, doc: 'Определение о принятии к производству', stage: 'accepted' },
-    { kind: 'postponed', re: /отложени[а-яё]*\s+(?:судебного\s+)?(?:заседани|разбирательств)/, doc: 'Определение об отложении', stage: 'pending' },
-    { kind: 'recess', re: /перерыв/, doc: 'Определение (протокол) о перерыве', stage: 'pending' },
-    { kind: 'suspended', re: /приостановлени[а-яё]*\s+производств/, doc: 'Определение о приостановлении', stage: 'suspended' },
-    { kind: 'resumed', re: /возобновлени[а-яё]*\s+производств/, doc: 'Определение о возобновлении', stage: 'pending' },
-    { kind: 'evidence', re: /истребовани[а-яё]*\s+(?:доказательств|документ|сведени)/, doc: 'Определение об истребовании доказательств', stage: 'pending' },
-    { kind: 'expert', re: /назначени[а-яё]*\s+(?:судебн[а-яё]*\s+)?экспертиз/, doc: 'Определение о назначении экспертизы', stage: 'pending' },
-    { kind: 'joinParty', re: /(?:привлечени|вступлени)[а-яё]*[\s\S]{0,40}(?:треть|соответчик|заинтересованн)/, doc: 'Определение о привлечении к участию', stage: 'pending' },
-    { kind: 'hearing', re: /назначени[а-яё]*\s+(?:судебного\s+)?(?:заседани|разбирательств)/, doc: 'Определение о назначении заседания', stage: 'accepted' },
-    { kind: 'correctionRuling', re: /исправлени[а-яё]*\s+(?:опечатк|описк|ошибк)|разъяснени[а-яё]*\s+(?:определени|судебного)/, doc: 'Определение об исправлении опечатки', stage: null },
-    { kind: 'securing', re: /обеспечительн[а-яё]*\s+мер|обеспечени[а-яё]*\s+(?:заявлени|иска)/, doc: 'Определение по обеспечительным мерам', stage: null }
+    { kind: 'returned', re: /возвращени[а-яё]*\s+(?:заявлени|жалоб)|возвратить\s+(?:заявлени|жалоб)|(?:заявлени|жалоб)[а-яё]*[\s\S]{0,200}?возвратить\s+(?:заявител|лицу)/, doc: 'Определение о возвращении заявления', stage: 'returned' },
+    { kind: 'accepted', re: /принят[а-яё]*\s+(?:к\s+производству|к\s+рассмотрению)|принят[а-яё]*\s+(?:[а-яё]+\s+){0,3}?(?:заявлени|жалоб)[а-яё]*[\s\S]{0,300}?к\s+(?:производству|рассмотрению)/, doc: 'Определение о принятии к производству', stage: 'accepted' },
+    { kind: 'postponed', re: /отложени|отложить/, doc: 'Определение об отложении', stage: 'pending' },
+    { kind: 'recess', re: /перерыв/, doc: 'Протокол (определение) о перерыве', stage: 'pending' },
+    { kind: 'suspended', re: /приостановлени[а-яё]*\s+производств|приостановить\s+производств/, doc: 'Определение о приостановлении', stage: 'suspended' },
+    { kind: 'resumed', re: /возобновлени[а-яё]*\s+производств|возобновить\s+производств/, doc: 'Определение о возобновлении', stage: 'pending' },
+    { kind: 'terminated', re: /прекращени[а-яё]*\s+производств|прекратить\s+производств/, doc: 'Определение о прекращении производства', stage: 'terminated' },
+    { kind: 'evidence', re: /истребовани|истребовать/, doc: 'Определение об истребовании доказательств', stage: 'pending' },
+    { kind: 'expert', re: /экспертиз/, doc: 'Определение о назначении экспертизы', stage: 'pending' },
+    { kind: 'joinParty', re: /(?:привлечени|привлечь|вступлени)[а-яё]*[\s\S]{0,80}?(?:треть|соответчик|заинтересованн|участию)/, doc: 'Определение о привлечении к участию', stage: 'pending' },
+    { kind: 'hearing', re: /назначени[а-яё]*\s+(?:дела\s+|заявлени[а-яё]*\s+)?(?:к\s+)?(?:судебно[а-яё]*\s+)?(?:заседани|разбирательств)|назначить\s+(?:дело\s+|заявление\s+)?(?:к\s+)?(?:судебно[а-яё]*\s+)?(?:заседани|разбирательств)/, doc: 'Определение о назначении заседания', stage: 'accepted' },
+    { kind: 'partly', re: /частичн[а-яё]*[\s\S]{0,60}?удовлетвор|удовлетвор[а-яё]*[\s\S]{0,60}?частичн|удовлетвор[а-яё]*[\s\S]{0,300}?в\s+остальной\s+части/, doc: 'Определение о частичном удовлетворении', stage: 'partly' },
+    { kind: 'denied', re: /отказ[а-яё]*\s+в\s+удовлетворении|в\s+удовлетворении\s+(?:заявлени|требовани)[\s\S]{0,300}?отказать/, doc: 'Определение об отказе в удовлетворении', stage: 'denied' },
+    { kind: 'granted', re: /удовлетворени[а-яё]*\s+(?:заявлени|требовани)|удовлетворить|признани[а-яё]*\s+(?:сделк|договор|платеж|перечислени|действи)[а-яё]*[\s\S]{0,120}?недействительн|признать\s+[\s\S]{0,160}?недействительн|применени[а-яё]*\s+последствий|применить\s+последстви/, doc: 'Определение о признании сделки недействительной', stage: 'granted' }
   ];
 
-  /* Предмет документа стороны. */
+  /* Процессуальные определения апелляции и кассации: движение жалобы, а не спора. */
+  const APPELLATE_PROC = new Set(['accepted', 'hearing', 'postponed', 'noMovement', 'recess', 'suspended',
+    'resumed', 'evidence', 'joinParty', 'expert']);
+  const APPELLATE_END = new Set(['returned', 'refusedAccept', 'terminated', 'unconsidered']);
+
+  /*
+   * Предмет документа стороны. Уточнение, отказ от заявления и документы
+   * во исполнение определения стоят выше «заявления об оспаривании»: в их
+   * названии тоже есть «о признании сделки недействительной», но спор они
+   * не начинают.
+   */
   const FILING_KINDS = [
     { kind: 'appealFiled', re: /апелляционн/, doc: 'Апелляционная жалоба', stage: 'appeal' },
     { kind: 'cassationFiled', re: /кассационн/, doc: 'Кассационная жалоба', stage: 'cassation' },
-    { kind: 'application', re: /(?:о|об)\s+(?:признании\s+сделки|оспаривании|признании\s+недействительн|применении\s+последствий)|недействительн/, doc: 'Заявление об оспаривании сделки', stage: 'filed' },
-    { kind: 'fixDefects', re: /устранени[а-яё]*\s+недостатк|во\s+исполнение\s+определени|дополнительн[а-яё]*\s+документ|письменн[а-яё]*\s+пояснени|дополнени[а-яё]*\s+к\s+заявлени/, doc: 'Документы во исполнение определения', stage: null },
+    { kind: 'withdraw', re: /отказ[а-яё]*\s+от\s+(?:заявлени|требовани|иска)/, doc: 'Отказ от заявления', stage: null },
+    { kind: 'amend', re: /уточнени|изменени[а-яё]*\s+(?:предмета|основани|требовани)/, doc: 'Уточнение требований', stage: null },
+    { kind: 'fixDefects', re: /устранени[а-яё]*\s+недостатк|во\s+исполнение\s+определени|дополнительн[а-яё]*\s+документ|письменн[а-яё]*\s+пояснени|дополнени[а-яё]*\s+к\s+заявлени|приобщени/, doc: 'Документы во исполнение определения', stage: null },
+    { kind: 'securingApp', re: /обеспечительн/, doc: 'Заявление об обеспечительных мерах', stage: null },
+    { kind: 'application', re: /(?:о|об)\s+(?:признании\s+(?:сделк|договор|платеж|перечислени|действи)|оспаривании|признании\s+недействительн|применении\s+последствий)|недействительн/, doc: 'Заявление об оспаривании сделки', stage: 'filed' },
     { kind: 'response', re: /отзыв|возражени/, doc: 'Отзыв (возражения)', stage: null },
     { kind: 'motion', re: /ходатайств/, doc: 'Ходатайство', stage: null }
   ];
+  /* Документы, которые сторона подаёт по ходу спора, а не в его начале. */
+  const FILING_ONLY = new Set(['withdraw', 'amend', 'fixDefects', 'response', 'motion']);
 
   const DEFAULT_BY_NATURE = {
     ruling: { kind: 'ruling', doc: 'Определение', stage: null },
     decision: { kind: 'ruling', doc: 'Решение', stage: null },
-    protocol: { kind: 'ruling', doc: 'Протокол заседания', stage: null },
-    application: { kind: 'application', doc: 'Заявление', stage: 'filed' },
+    protocol: { kind: 'protocol', doc: 'Протокол заседания', stage: null },
+    application: { kind: 'otherApplication', doc: 'Заявление', stage: null },
     motion: { kind: 'motion', doc: 'Ходатайство', stage: null },
     response: { kind: 'response', doc: 'Отзыв (возражения)', stage: null },
+    filing: { kind: 'filing', doc: 'Документы стороны', stage: null },
     writ: { kind: 'writ', doc: 'Исполнительный лист', stage: 'execution' }
   };
 
   const isCassation = (t) => /кассационн|окружн|верховн/.test(t);
 
-  /** Тип документа по названию. kind === null — документ не опознан. */
-  function classify(record) {
-    const t = N([record.title, record.extra && record.extra.join(' ')].filter(Boolean).join(' '));
+  /**
+   * Определение, вынесенное по жалобе, двигает жалобу, а не спор: «принята к
+   * производству» в апелляции не возвращает спор на стадию принятия.
+   */
+  function appellate(record, t, cls) {
+    const inAppeal = record.instance === 'Апелляция' || /апелляционн[а-яё]*\s+(?:жалоб|суд|инстанц)/.test(t);
+    const inCass = record.instance === 'Кассация' || /кассационн[а-яё]*\s+(?:жалоб|инстанц)|суд[а-яё]*\s+[а-яё-]+\s+округа/.test(t);
+    if (!inAppeal && !inCass) return cls;
+    const cas = inCass && !inAppeal ? true : inCass && record.instance === 'Кассация';
+    const where = cas ? 'кассация' : 'апелляция';
+    if (APPELLATE_PROC.has(cls.kind))
+      return { ...cls, kind: cas ? 'cassationProc' : 'appealProc', doc: `${cls.doc} (${where})`, stage: cas ? 'cassation' : 'appeal', procKind: cls.kind };
+    if (APPELLATE_END.has(cls.kind))
+      return { ...cls, kind: 'appealEnded', doc: `${cls.doc} (${where})`, stage: cas ? 'cassationDone' : 'appealDone', procKind: cls.kind };
+    return cls;
+  }
+
+  /**
+   * Тип документа по названию. kind === null — документ не опознан.
+   * resolution — резолютивная часть определения, если её вставили: по ней
+   * уточняется документ, чьё название в карточке обрезано до «Определение».
+   */
+  function classify(record, resolution) {
+    const base = classifyTitle(record);
+    if (!resolution || !['ruling', 'decision', 'protocol', 'unknown'].includes(base.nature)) return base;
+    if (base.kind && !['ruling', 'protocol'].includes(base.kind)) return base;
+    const low = N(resolution);
+    const hint = RULING_KINDS.find((k) => k.re.test(low));
+    if (!hint) return base;
+    return appellate(record, N(globalThis.KadCard.title(record)),
+      { kind: hint.kind, nature: base.nature, doc: hint.doc, stage: hint.stage, matched: hint.re.source, fromText: true });
+  }
+
+  function classifyTitle(record) {
+    const t = N([record.title, record.content, record.extra && record.extra.join(' ')].filter(Boolean).join(' '));
     if (!t) return { kind: null, doc: record.title || 'Документ', stage: null };
 
     const nat = (NATURES.find((x) => x.re.test(t)) || { nature: 'unknown' }).nature;
@@ -157,9 +221,9 @@
         doc: cas ? 'Кассационная жалоба' : 'Апелляционная жалоба', stage: cas ? 'cassation' : 'appeal' };
     }
     if (nat === 'appealRuling') {
-      const cas = isCassation(t);
+      const cas = isCassation(t) || record.instance === 'Кассация';
       return { kind: cas ? 'cassationResult' : 'appealResult', nature: nat,
-        doc: cas ? 'Постановление кассации' : 'Постановление апелляции', stage: cas ? 'cassation' : 'appeal' };
+        doc: cas ? 'Постановление кассации' : 'Постановление апелляции', stage: cas ? 'cassationDone' : 'appealDone' };
     }
 
     // Природа, названная прямо, сильнее предмета: «Отзыв на заявление о
@@ -167,17 +231,26 @@
     if (nat === 'response') return { kind: 'response', nature: nat, doc: 'Отзыв (возражения)', stage: null };
     if (nat === 'motion') return { kind: 'motion', nature: nat, doc: 'Ходатайство', stage: null };
 
-    const pool = nat === 'application' ? FILING_KINDS : (nat === 'writ' ? [] : RULING_KINDS);
+    let pool = RULING_KINDS;
+    if (nat === 'application') pool = FILING_KINDS;
+    else if (nat === 'filing') pool = FILING_KINDS.filter((k) => FILING_ONLY.has(k.kind));
+    else if (nat === 'writ') pool = [];
 
     const hit = pool.find((r) => r.re.test(t));
-    if (hit) return { kind: hit.kind, nature: nat, doc: hit.doc, stage: hit.stage, matched: hit.re.source };
+    if (hit) return appellate(record, t, { kind: hit.kind, nature: nat, doc: hit.doc, stage: hit.stage, matched: hit.re.source });
 
     if (DEFAULT_BY_NATURE[nat]) return { ...DEFAULT_BY_NATURE[nat], nature: nat };
 
     // Название без опознаваемой природы: «О принятии заявления к производству»
-    // в карточке встречается и без слова «Определение».
-    const loose = RULING_KINDS.find((r) => r.re.test(t));
-    if (loose) return { kind: loose.kind, nature: 'unknown', doc: loose.doc, stage: loose.stage, matched: loose.re.source };
+    // в карточке встречается и без слова «Определение». Только для названий,
+    // начинающихся с «о/об»: «Дополнительные документы во исполнение
+    // определения об оставлении без движения» — не определение суда.
+    if (/^(?:о|об)\s/.test(t)) {
+      const loose = RULING_KINDS.find((r) => r.re.test(t));
+      if (loose) return appellate(record, t, { kind: loose.kind, nature: 'unknown', doc: loose.doc, stage: loose.stage, matched: loose.re.source });
+    }
+    const filing = FILING_KINDS.find((r) => FILING_ONLY.has(r.kind) && r.re.test(t));
+    if (filing) return { kind: filing.kind, nature: 'filing', doc: filing.doc, stage: null, matched: filing.re.source };
     return { kind: null, nature: 'unknown', doc: record.title || 'Документ', stage: null };
   }
 
@@ -194,8 +267,8 @@
         due: { kind: 'workdays', n: 5, norm: 'ч. 1 ст. 127 АПК РФ' }, norm: 'ч. 1 ст. 127 АПК РФ' }
     ],
     noMovement: [
-      { role: 'applicant', what: 'Устранить недостатки, указанные в определении, в установленный судом срок. Срок указан в самом определении — вставьте его текст, чтобы дата попала в расчёт.',
-        due: { kind: 'inRuling' }, norm: 'ч. 2 ст. 128 АПК РФ' },
+      { role: 'applicant', what: 'Устранить недостатки, указанные в определении, в установленный судом срок. Срок указан в самом определении — загрузите или вставьте его текст, чтобы дата попала в расчёт.',
+        due: { kind: 'inRuling' }, norm: 'ч. 2 ст. 128 АПК РФ', doneBy: ['fixDefects', 'amend'] },
       { role: 'applicant', what: 'Если недостатки не устранить в срок, заявление будет возвращено, а вместе с ним — потеряно время; при истечении годичного срока оспаривания возврат может стать необратимым.',
         norm: 'ч. 4 ст. 128 АПК РФ, п. 2 ст. 61.9 Закона о банкротстве' },
       { role: 'participant', what: 'Своих действий не требуется: недостатки устраняет заявитель. Отследить, устранены ли они, — от этого зависит, начнётся спор или заявление вернут.',
@@ -203,7 +276,7 @@
     ],
     accepted: [
       { role: 'participant', what: 'Представить в суд отзыв на заявление с возражениями или согласием по существу оспаривания и документы, на которые ссылаетесь, — к дате судебного заседания.',
-        due: { kind: 'beforeHearing' }, norm: 'ст. 131 АПК РФ, п. 2 ст. 61.8 Закона о банкротстве' },
+        due: { kind: 'beforeHearing' }, norm: 'ст. 131 АПК РФ, п. 2 ст. 61.8 Закона о банкротстве', doneBy: ['response'] },
       { role: 'participant', what: 'Направить копии отзыва и приложений лицам, участвующим в деле, заблаговременно, чтобы они успели ознакомиться до заседания.',
         due: { kind: 'beforeHearing' }, norm: 'ч. 3 ст. 131 АПК РФ' },
       { role: 'participant', what: 'Приобщить имеющиеся у управляющего документы по оспариваемой сделке: договор, платёжные документы, выписки по счетам, сведения о наличии признаков неплатёжеспособности на дату сделки.',
@@ -227,7 +300,7 @@
     ],
     evidence: [
       { role: 'any', what: 'Представить истребованные судом документы и сведения в указанный в определении срок. За неисполнение суд вправе наложить судебный штраф.',
-        due: { kind: 'inRuling' }, norm: 'ч. 6, 9 ст. 66 АПК РФ' }
+        due: { kind: 'inRuling' }, norm: 'ч. 6, 9 ст. 66 АПК РФ', doneBy: ['fixDefects', 'filing'] }
     ],
     expert: [
       { role: 'any', what: 'Представить вопросы эксперту и кандидатуры экспертных организаций; при заявлении экспертизы управляющим — внести денежные средства на депозитный счёт суда.',
@@ -302,6 +375,36 @@
       { role: 'any', what: 'Исполнить акт с учётом результата кассации; при направлении на новое рассмотрение — готовить позицию заново к назначенному заседанию.',
         norm: 'ст. 287, 289 АПК РФ' }
     ],
+    appealProc: [
+      { role: 'any', what: 'Представить отзыв на апелляционную жалобу с документами, подтверждающими возражения, так, чтобы он поступил в суд и к лицам, участвующим в деле, до заседания; обеспечить явку в апелляционный суд или заявить о рассмотрении в отсутствие.',
+        due: { kind: 'beforeHearing' }, norm: 'ст. 262, 266 АПК РФ', doneBy: ['response'] }
+    ],
+    cassationProc: [
+      { role: 'any', what: 'Представить отзыв на кассационную жалобу до заседания; учесть, что суд округа доказательства не принимает и проверяет только применение норм права.',
+        due: { kind: 'beforeHearing' }, norm: 'ст. 279, 286, 287 АПК РФ', doneBy: ['response'] }
+    ],
+    appealEnded: [
+      { role: 'any', what: 'Производство по жалобе окончено без рассмотрения по существу: проверить, вступил ли обжалованный судебный акт в силу, и исполнять его.',
+        norm: 'ст. 180, 264, 265 АПК РФ' }
+    ],
+    amend: [
+      { role: 'participant', what: 'Заявитель уточнил требования: проверить, изменились ли предмет или основание оспаривания, и привести отзыв в соответствие к заседанию.',
+        due: { kind: 'beforeHearing' }, norm: 'ч. 1 ст. 49 АПК РФ' }
+    ],
+    withdraw: [
+      { role: 'participant', what: 'Заявитель отказался от заявления. Суд не принимает отказ, если он нарушает права других лиц: если сделка действительно причинила вред кредиторам, решить, заявлять ли возражения или оспаривать сделку самостоятельно, пока не истёк срок.',
+        norm: 'ч. 2, 5 ст. 49 АПК РФ, п. 2 ст. 61.9 Закона о банкротстве' },
+      { role: 'applicant', what: 'Отказ от заявления заявлен: после прекращения производства повторно обратиться с тем же требованием по тем же основаниям нельзя.',
+        norm: 'ч. 3 ст. 151 АПК РФ' }
+    ],
+    securing: [
+      { role: 'any', what: 'Проверить, какие обеспечительные меры приняты, заменены или отменены, и соблюдать их в части, касающейся управляющего (например, не распоряжаться спорным имуществом).',
+        norm: 'ст. 90–97 АПК РФ, ст. 46 Закона о банкротстве' }
+    ],
+    correctionRuling: [
+      { role: 'any', what: 'Сверить исправленную редакцию определения с прежней: могли измениться сроки, суммы или адресаты поручений.',
+        norm: 'ст. 179 АПК РФ' }
+    ],
     writ: [
       { role: 'any', what: 'Предъявить исполнительный лист к исполнению: срок — три года со дня вступления судебного акта в силу.',
         due: { kind: 'years', n: 3, norm: 'ч. 1 ст. 321 АПК РФ' }, norm: 'ч. 1 ст. 321 АПК РФ' }
@@ -316,10 +419,37 @@
 
   /* ---------- разбор текста определения ---------- */
 
-  const DEMAND_WORDS = /(обязать|обязан|предложить|предлагает|истребовать|представить|направить|явиться|обеспечить|уведомить|разъяснить|предупредить|устранить|внести)/i;
+  const ACTION_WORDS = /(?:представить|направить|явиться|обеспечить|уведомить|устранить|внести|раскрыть|перечислить|передать)/i;
+  const DEMAND_WORDS = /(обязать|обязан|предложить|предлагает|истребовать|представить|направить|явиться|обеспечить|уведомить|предупредить|устранить|внести)/i;
   /* Окончания — [а-яё]*, а не \w*: см. оговорку про кириллицу выше. */
   const FU_WORDS = /(?:финансов|арбитражн|конкурсн)[а-яё]*\s+управляющ|управляющ[а-яё]+/i;
   const APPLICANT_WORDS = /заявител[а-яё]+|кредитор[а-яё]*/i;
+  /* «Лицам, участвующим в деле (обособленном споре)» — и управляющему тоже. */
+  const ALL_WORDS = /лиц[а-яё]*,?\s+участвующ[а-яё]*\s+в\s+(?:деле|споре|обособленном)|участник[а-яё]*\s+(?:спора|обособленного)/i;
+
+  const MONTHS_RE = '(?:января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)';
+  const DATE_ANY = `(\\d{1,2}[.\\-/]\\d{1,2}[.\\-/]\\d{4}|\\d{1,2}\\s+${MONTHS_RE}\\s+\\d{4})`;
+  /* «10:30», «10 час. 30 мин.», «10 ч. 30 м.» */
+  const TIME_ANY = '(\\d{1,2})\\s*(?::|\\.|час[а-я]*\\.?|ч\\.)\\s*(\\d{2})';
+
+  const DEADLINE_RE = new RegExp(`(?:в\\s+срок\\s+)?(?:до|не\\s+позднее|не\\s+позже)\\s+${DATE_ANY}`, 'gi');
+  const DEADLINE_ONE = new RegExp(`(?:до|не\\s+позднее|не\\s+позже)\\s+${DATE_ANY}`, 'i');
+  const HEARING_RE = new RegExp(`(?:назначить|отложить|продолжить|назначено|отложено|состоится|перерыв[а-яё]*\\s+до)[\\s\\S]{0,160}?${DATE_ANY}(?:[\\s\\S]{0,25}?${TIME_ANY})?`, 'i');
+
+  /**
+   * Начало резолютивной части. Берётся последнее «определил:» — в
+   * описательной части слово встречается в цитатах прежних актов. Суды
+   * пишут его и вразрядку: «О П Р Е Д Е Л И Л:».
+   */
+  function resolutionStart(src) {
+    const re = /(?:о\s?п\s?р\s?е\s?д\s?е\s?л\s?и\s?л|п\s?о\s?с\s?т\s?а\s?н\s?о\s?в\s?и\s?л|р\s?е\s?ш\s?и\s?л)\s?[аи]?\s*[:—-]/gi;
+    let last = -1;
+    let m;
+    while ((m = re.exec(src))) last = m.index + m[0].length;
+    if (last >= 0) return last;
+    const loose = src.search(/определил[аи]?\s/i);
+    return loose >= 0 ? loose + 'определил'.length : -1;
+  }
 
   /**
    * Текст определения → сроки, дата заседания и адресные требования.
@@ -328,42 +458,60 @@
    */
   function parseRuling(text) {
     const D = globalThis.KadDates;
-    const src = String(text || '').replace(/ /g, ' ').replace(/\s*\n\s*/g, '\n');
+    const src = unwrap(String(text || '').replace(/\u00a0/g, ' ').replace(/[ \t]*\n[ \t]*/g, '\n').replace(/-\n(?=[а-яё])/g, ''));
     if (!src.trim()) return null;
 
-    const res = { deadlines: [], hearing: null, demands: [], resolution: '', kindHint: null };
+    const res = { deadlines: [], hearing: null, demands: [], resolution: '', kindHint: null, hasResolution: false };
 
-    // Резолютивная часть: всё после «определил».
-    const rm = src.match(/определил[аи]?\s*[:—-]?\s*([\s\S]+)$/i);
-    res.resolution = (rm ? rm[1] : src).trim();
+    const at = resolutionStart(src);
+    res.hasResolution = at >= 0;
+    res.resolution = (at >= 0 ? src.slice(at) : src).trim();
+    // Сроки ищутся в резолютивной части: в описательной — сроки прежних
+    // определений, которые уже истекли.
+    const zone = res.resolution;
 
-    // «в срок до 15.10.2026», «не позднее 15 октября 2026»
-    for (const m of src.matchAll(/(?:в\s+срок\s+)?(?:до|не\s+позднее|по)\s+((?:\d{1,2}[.\-/]\d{1,2}[.\-/]\d{4})|(?:\d{1,2}\s+[а-яё]{3,}\s+\d{4}))/gi)) {
+    // «в срок до 15.10.2026», «не позднее 15 октября 2026 года»
+    for (const m of zone.matchAll(DEADLINE_RE)) {
       const date = D.find(m[1]);
-      if (date) res.deadlines.push({ date, quote: sentenceAt(src, m.index), source: 'срок из текста' });
+      if (date) res.deadlines.push({ date, quote: sentenceAt(zone, m.index), source: 'срок из текста' });
     }
-    // «в течение 10 дней», «в пятидневный срок»
-    for (const m of src.matchAll(/в\s+течение\s+(\d{1,3})\s+(рабочих\s+|календарных\s+)?дн/gi)) {
-      res.deadlines.push({ days: +m[1], calendar: /календарн/i.test(m[2] || ''), quote: sentenceAt(src, m.index), source: 'срок из текста' });
+    // «в течение 10 дней», «в течение пяти рабочих дней»
+    for (const m of zone.matchAll(/в\s+течение\s+(\d{1,3}|[а-яё]+)\s+(рабочих\s+|календарных\s+)?дн/gi)) {
+      const n = /^\d+$/.test(m[1]) ? +m[1] : WORD_NUM[m[1].toLowerCase()];
+      if (!n) continue;
+      res.deadlines.push({ days: n, calendar: /календарн/i.test(m[2] || ''), quote: sentenceAt(zone, m.index), source: 'срок из текста' });
     }
 
-    // Дата и время судебного заседания.
-    const hm = src.match(/(?:назначить|отложить|продолжить|рассмотрение)[\s\S]{0,120}?(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{4})(?:[\s\S]{0,20}?(\d{1,2}[:.]\d{2}))?/i);
+    // Дата и время судебного заседания: сначала в резолютивной части.
+    const hm = zone.match(HEARING_RE) || src.match(HEARING_RE);
     if (hm) {
       const date = D.find(hm[1]);
-      if (date) res.hearing = { date, time: (hm[2] || '').replace('.', ':'), quote: sentenceAt(src, hm.index) };
+      if (date) {
+        const where = zone.includes(hm[0]) ? zone : src;
+        res.hearing = { date, time: hm[2] ? `${hm[2].padStart(2, '0')}:${hm[3]}` : '', quote: sentenceAt(where, where.indexOf(hm[0])) };
+      }
     }
 
-    // Адресные требования: предложения с побудительным глаголом.
-    for (const s of sentences(res.resolution)) {
+    // Адресные требования: предложения с побудительным глаголом. Адресат —
+    // тот, кто назван до глагола действия: в «Заявителю направить копии
+    // лицам, участвующим в деле» лица, участвующие в деле, — получатели.
+    for (const s of sentences(zone)) {
       if (!DEMAND_WORDS.test(s)) continue;
+      const act = s.slice(1).search(ACTION_WORDS);
+      const who = act >= 0 ? s.slice(0, act + 1) : s.slice(0, 80);
       res.demands.push({
         text: s.trim().replace(/\s+/g, ' '),
-        toFinancialManager: FU_WORDS.test(s),
+        toFinancialManager: FU_WORDS.test(who),
+        toAll: ALL_WORDS.test(who),
         // «Предложить заявителю устранить…» адресовано управляющему тогда и
         // только тогда, когда заявление подавал он: решает вызывающий код.
-        toApplicant: APPLICANT_WORDS.test(s),
-        date: D.find(s)
+        toApplicant: APPLICANT_WORDS.test(who),
+        date: (() => { const m = s.match(DEADLINE_ONE); return m ? D.find(m[1]) : null; })(),
+        ...(() => {
+          const m = s.match(/в\s+течение\s+(\d{1,3}|[а-яё]+)\s+(рабочих\s+|календарных\s+)?дн/i);
+          const n = m && (/^\d+$/.test(m[1]) ? +m[1] : WORD_NUM[m[1].toLowerCase()]);
+          return n ? { days: n, calendar: /календарн/i.test(m[2] || '') } : {};
+        })()
       });
     }
 
@@ -376,7 +524,21 @@
     return res;
   }
 
-  const sentences = (t) => String(t).split(/(?<=[.;])\s+(?=[А-ЯЁA-Z])|\n+/).filter((s) => s.trim().length > 12);
+  const WORD_NUM = { 'одного': 1, 'двух': 2, 'трех': 3, 'трёх': 3, 'пяти': 5, 'семи': 7, 'десяти': 10,
+    'пятнадцати': 15, 'двадцати': 20, 'тридцати': 30 };
+
+  /*
+   * Текст из PDF рвётся по ширине страницы: «в срок до» на одной строке,
+   * «14.10.2026.» на другой. Перевод строки после слова без знака конца
+   * фразы — это перенос, а не граница; исключение — номер пункта «2. ».
+   * Замена символа на символ: позиции в тексте не сдвигаются.
+   */
+  const unwrap = (t) => t.replace(/([^.;:!?\n])\n(?!\n|\d{1,2}[.)]\s)/g, '$1 ');
+
+  /* Предложения: граница — точка перед заглавной буквой или перевод строки. */
+  const sentences = (t) => String(t)
+    .split(/(?<=[.;])\s+(?=[А-ЯЁA-Z0-9])|\n+/)
+    .filter((s) => s.trim().length > 12);
 
   /**
    * Предложение, внутри которого оказалась найденная позиция.
@@ -385,7 +547,7 @@
    * цитата обрывается на середине даты.
    */
   function sentenceAt(text, index) {
-    const B = /[.;!?]\s+(?=[А-ЯЁA-Z])|\n+/g;
+    const B = /[.;!?]\s+(?=[А-ЯЁA-Z])|\n+(?=[А-ЯЁA-Z0-9])/g;
     let from = 0;
     let to = text.length;
     let m;
@@ -398,5 +560,5 @@
   }
 
   globalThis.KadRules = { STAGES, NATURES, RULING_KINDS, FILING_KINDS, REQ,
-    classify, requirements, deadline, parseRuling, APPEAL_10, E };
+    classify, classifyTitle, requirements, deadline, parseRuling, APPEAL_10, E };
 })();

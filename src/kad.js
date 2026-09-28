@@ -8,7 +8,9 @@
  * подал, в ответ на что» — держится годами.
  *
  * HTML, если он есть, всё равно сначала превращается в такой же текст:
- * одна ветка разбора вместо двух, которые расходятся.
+ * одна ветка разбора вместо двух, которые расходятся. Загрузчик на сервере
+ * (server/kad-fetch.mjs) тоже отдаёт текст — либо текст страницы, либо
+ * записи картотеки, переложенные в тот же построчный вид с явными метками.
  */
 (function () {
   'use strict';
@@ -22,31 +24,62 @@
     /^сервис/i, /^версия для печати/i, /^свернуть/i, /^развернуть/i, /^показать (ещё|все)/i,
     /^\d+\s*(документ|документов|документа)$/i, /^страница \d+/i, /^всего найдено/i,
     /^фильтр/i, /^сбросить/i, /^применить/i, /^закрыть$/i, /^назад$/i, /^вперёд$/i,
-    /^cookie/i, /^мы используем/i, /^капча/i, /^проверка/i, /^javascript/i
+    /^cookie/i, /^мы используем/i, /^капча/i, /^javascript/i
   ];
 
-  /* Поля записи. Порядок важен: сначала более длинные метки. */
+  const GUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+
+  /* Поля записи. Порядок важен: сначала более длинные и более точные метки. */
   const FIELDS = [
+    { key: 'responseToId', re: new RegExp(`^ответ\\s+на\\s+документ[:\\s]+(${GUID})\\s*$`, 'i') },
+    { key: 'docId', re: new RegExp(`^(?:документ|id\\s+документа)[:\\s]+(${GUID})\\s*$`, 'i') },
+    { key: 'pdf', re: /^pdf[:\s]+(https?:\/\/\S+)\s*$/i },
     { key: 'responseTo', re: /^в\s+ответ\s+на[:\s]*(.*)$/i },
+    { key: 'hearingInfo', re: /^(?:дата\s+и\s+время\s+(?:судебного\s+)?заседания|(?:судебное\s+)?заседание\s+назначено(?:\s+на)?)[:\s]*(.*)$/i },
     { key: 'applicant', re: /^(?:заявитель|истец|кредитор)(?:\s*\(.*?\))?[:\s]+(.*)$/i },
     { key: 'respondent', re: /^(?:ответчик|должник|заинтересованное\s+лицо)[:\s]+(.*)$/i },
     { key: 'thirdParty', re: /^(?:третье\s+лицо|иные\s+лица)[:\s]+(.*)$/i },
     { key: 'judge', re: /^(?:судья|председательствующий)[:\s]+(.*)$/i },
     { key: 'instance', re: /^(?:инстанция|суд)[:\s]+(.*)$/i },
-    { key: 'published', re: /^(?:дата\s+публикации|опубликован[оа]?)[:\s]+(.*)$/i },
-    { key: 'from', re: /^(?:от|подал|заявитель\s+документа)[:\s]+(.*)$/i }
+    { key: 'published', re: /^(?:дата\s+публикации|публикация|опубликован[оа]?)[:\s]+(.*)$/i },
+    { key: 'from', re: /^(?:подал|заявитель\s+документа)[:\s]+(.*)$/i }
   ];
 
-  /* Инстанции идут в карточке заголовками и переключают контекст записей. */
+  /*
+   * «В ответ на» и дата заседания в тексте страницы бывают в одной строке с
+   * названием документа: блоки картотеки строчные, и при копировании перевод
+   * строки между ними теряется. Такая строка режется по метке.
+   */
+  const INLINE = /\s+(?=(?:в\s+ответ\s+на|дата\s+и\s+время\s+(?:судебного\s+)?заседания)[\s:])/i;
+
+  /*
+   * Инстанции идут в карточке заголовками и переключают контекст записей.
+   * Узнаются только заголовки, а не любое упоминание: запись «Апелляционная
+   * жалоба» в хронологии первой инстанции контекст не меняет.
+   */
   const INSTANCES = [
-    { re: /перв(ая|ой)\s+инстанц/i, name: 'Первая инстанция' },
-    { re: /апелляц/i, name: 'Апелляция' },
-    { re: /кассац/i, name: 'Кассация' },
-    { re: /надзор|верховн/i, name: 'Надзор' }
+    { re: /^перв[а-яё]*\s+инстанци/i, name: 'Первая инстанция' },
+    { re: /^апелляционн[а-яё]*\s+инстанци|^[а-яё0-9-]*\s*арбитражн[а-яё]*\s+апелляционн[а-яё]*\s+суд/i, name: 'Апелляция' },
+    { re: /^кассационн[а-яё]*\s+инстанци|^арбитражн[а-яё]*\s+суд\s+[а-яё-]+\s+(?:[а-яё-]+\s+)?округа/i, name: 'Кассация' },
+    { re: /^надзорн[а-яё]*\s+инстанци|^верховн[а-яё]*\s+суд/i, name: 'Надзор' }
   ];
 
   const DATE_AT_START = /^(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{4})(?:\s+(\d{1,2}:\d{2}))?\s*(.*)$/;
   const TIME_ONLY = /^(\d{1,2}:\d{2}(?::\d{2})?)$/;
+  /*
+   * Строка, начинающаяся с даты, но не открывающая запись: отметка о
+   * публикации («29.06.2026 10:11:12 MSK») или продолжение предыдущей строки
+   * («05.08.2026, 10:30, зал 3010» после «Дата и время судебного заседания»).
+   */
+  const NOT_A_RECORD = /^(?::\d{2}\b|[,;:)]|.*\b(?:MSK|МСК)\b)/i;
+
+  /*
+   * Тип документа без содержания: «Определение», «Заявление». Картотека
+   * пишет тип и содержание («Об оставлении заявления без движения») разными
+   * строками, и для опознания нужны обе.
+   */
+  const BARE_TYPE = /^(?:заявлени[а-яё]*|определени[а-яё]*|решени[а-яё]*|постановлени[а-яё]*|ходатайств[а-яё]*|отзыв[а-яё]*|жалоб[а-яё]*|апелляционн[а-яё]*\s+жалоб[а-яё]*|кассационн[а-яё]*\s+жалоб[а-яё]*|протокол[а-яё]*|возражени[а-яё]*|дополнени[а-яё]*|дополнительные\s+документы|пояснени[а-яё]*|письменные\s+пояснения|иные\s+документы|документ|уведомлени[а-яё]*|письм[а-яё]*|мнени[а-яё]*|исполнительный\s+лист|заявление\s*\(ходатайство\)|заявление\s*\/\s*ходатайство)$/i;
+
   /*
    * Номер дела: буква «А» в картотеке бывает и кириллической, и латинской.
    * Границу слова \b здесь использовать нельзя — кириллица для неё не буква,
@@ -69,12 +102,16 @@
   /**
    * HTML → текст. Блочные теги дают перевод строки: без этого «В ответ на»
    * склеивается с названием документа в одну строку и поле теряется.
+   * Ссылки на PDF судебных актов сохраняются отдельной строкой «PDF: …» —
+   * по ним сервер умеет достать текст определения.
    */
   function htmlToText(html) {
     if (typeof DOMParser === 'undefined') {
       return html
         .replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ')
-        .replace(/<br\s*\/?>|<\/(p|div|li|tr|td|th|h\d|section|article)>/gi, '\n')
+        .replace(/<a\b[^>]*href="([^"]*\/Document\/Pdf\/[^"]*)"[^>]*>([\s\S]*?)<\/a>/gi,
+          (_, href, inner) => `${inner}\nPDF: ${absolute(href)}\n`)
+        .replace(/<br\s*\/?>|<\/(p|div|li|tr|td|th|h\d|section|article|dt|dd)>/gi, '\n')
         .replace(/<[^>]+>/g, ' ')
         .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')
         .replace(/&quot;/g, '"').replace(/&laquo;/g, '«').replace(/&raquo;/g, '»')
@@ -82,11 +119,15 @@
     }
     const doc = new DOMParser().parseFromString(html, 'text/html');
     for (const el of doc.querySelectorAll('script,style,noscript,svg')) el.remove();
+    for (const a of doc.querySelectorAll('a[href*="/Document/Pdf/"]'))
+      a.after(`\nPDF: ${absolute(a.getAttribute('href'))}\n`);
     for (const el of doc.querySelectorAll('br')) el.replaceWith('\n');
     for (const el of doc.querySelectorAll('p,div,li,tr,td,th,h1,h2,h3,h4,section,article,dt,dd'))
       el.append('\n');
     return doc.body ? doc.body.textContent : '';
   }
+
+  const absolute = (href) => /^https?:/i.test(href) ? href : 'https://kad.arbitr.ru' + (href.startsWith('/') ? '' : '/') + href;
 
   /** Текст → массив содержательных строк. */
   function lines(raw) {
@@ -104,10 +145,9 @@
     const head = all.slice(0, 60);
     const text = all.join('\n');
 
-    const no = ((text.match(CASE_NO) || [])[1] || '').replace(/\s+/g, '');
-    const url = (text.match(/https?:\/\/kad\.arbitr\.ru\/[^\s"'<>]+/i) || [''])[0];
-    const guid = (url.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i) ||
-      text.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i) || [''])[0];
+    const no = ((text.match(CASE_NO) || [])[1] || '').replace(/\s+/g, '').replace(/^A/, 'А');
+    const url = (text.match(/https?:\/\/kad\.arbitr\.ru\/Card\/[^\s"'<>]+/i) || [''])[0];
+    const guid = (url.match(new RegExp(GUID, 'i')) || [''])[0];
 
     let court = '';
     for (const l of head) {
@@ -124,17 +164,15 @@
     const jm = text.match(/суд(?:ья|ьи)[:\s]+([^\n]{3,80})/i);
     if (jm) judge = jm[1].trim();
 
-    let subject = '';
-    const sm = text.match(/^(?:о\s|о\b)[^\n]{5,160}$/im);
-    if (sm) subject = sm[0].trim();
-
     const filed = (() => {
       const m = text.match(/(?:дата\s+регистрации|поступило|дата\s+поступления)[:\s]+([^\n]+)/i);
       return m ? D.find(m[1]) : null;
     })();
 
-    return { caseNo: no, court, judge, debtor, subject, url, guid, filed };
+    return { caseNo: no, court, judge, debtor, url, guid, filed };
   }
+
+  const hasPending = (rec) => FIELDS.some((f) => rec[f.key + 'Pending']);
 
   /**
    * Записи карточки. Границей записи считается строка, начинающаяся с даты:
@@ -156,24 +194,29 @@
     for (let i = 0; i < all.length; i++) {
       const line = all[i];
 
-      const inst = INSTANCES.find((x) => x.re.test(line) && line.length < 80 && !DATE_AT_START.test(line));
-      if (inst && !/^в\s+ответ/i.test(line)) {
-        instance = inst.name;
-        if (!cur) continue;
+      if (line.length < 100 && !DATE_AT_START.test(line)) {
+        const inst = INSTANCES.find((x) => x.re.test(line));
+        if (inst) { push(); instance = inst.name; continue; }
       }
 
       const dm = line.match(DATE_AT_START);
-      if (dm && D.parse(dm[1])) {
+      if (dm && D.parse(dm[1]) && !(cur && hasPending(cur))) {
+        const rest = (dm[3] || '').trim();
+        if (cur && NOT_A_RECORD.test(rest)) {
+          if (/\b(?:MSK|МСК)\b/i.test(rest) && !cur.published) cur.published = line;
+          else absorb(cur, line);
+          continue;
+        }
         push();
         cur = {
           date: D.parse(dm[1]),
           time: dm[2] || '',
           title: '',
+          content: '',
           instance,
           extra: [],
           line: i
         };
-        const rest = (dm[3] || '').trim();
         if (rest) absorb(cur, rest);
         continue;
       }
@@ -186,8 +229,13 @@
     push();
 
     for (const r of out) {
+      for (const f of FIELDS) delete r[f.key + 'Pending'];
       r.title = r.title.replace(/\s*[·|]\s*$/, '').trim();
-      r.id = `${r.date}|${norm(r.title).slice(0, 80)}|${norm(r.from || r.applicant || '').slice(0, 40)}`;
+      if (r.hearingInfo) {
+        const hd = D.find(r.hearingInfo);
+        if (hd) r.hearing = { date: hd, time: (r.hearingInfo.match(/\b(\d{1,2}[:.]\d{2})\b(?![.\d])/) || ['', ''])[1].replace('.', ':'), text: r.hearingInfo };
+      }
+      r.id = r.docId || `${r.date}|${norm(r.title + ' ' + r.content).slice(0, 100)}|${norm(r.from || r.applicant || '').slice(0, 40)}`;
     }
 
     // Один и тот же документ попадает и в хронологию, и в судебные акты.
@@ -196,7 +244,7 @@
       const prev = seen.get(r.id);
       if (!prev) { seen.set(r.id, r); continue; }
       // Сливаем: у одной копии может быть «В ответ на», у другой — участники.
-      for (const k of ['responseTo', 'applicant', 'respondent', 'thirdParty', 'judge', 'from', 'published', 'time'])
+      for (const k of ['responseTo', 'responseToId', 'applicant', 'respondent', 'thirdParty', 'judge', 'from', 'published', 'time', 'pdf', 'hearing', 'hearingInfo'])
         if (!prev[k] && r[k]) prev[k] = r[k];
       prev.extra.push(...r.extra.filter((x) => !prev.extra.includes(x)));
     }
@@ -207,12 +255,18 @@
 
   /** Распределяет строку записи: поле, название документа или подробность. */
   function absorb(rec, line) {
+    const cut = line.match(INLINE);
+    if (cut && cut.index > 0) {
+      absorb(rec, line.slice(0, cut.index).trim());
+      absorb(rec, line.slice(cut.index).trim());
+      return;
+    }
     for (const f of FIELDS) {
       const m = line.match(f.re);
       if (m) {
         const v = (m[1] || '').trim();
         if (!v) { rec[f.key + 'Pending'] = true; return; }
-        rec[f.key] = rec[f.key] ? rec[f.key] + '; ' + v : v;
+        rec[f.key] = rec[f.key] && rec[f.key] !== v ? rec[f.key] + '; ' + v : v;
         return;
       }
     }
@@ -227,11 +281,12 @@
     if (!rec.title) { rec.title = line; return; }
     // Организация или ФИО сразу после названия — это тот, кто подал документ.
     if (!rec.from && looksLikeParty(line)) { rec.from = line; return; }
+    if (!rec.content && BARE_TYPE.test(rec.title) && !BARE_TYPE.test(line)) { rec.content = line; return; }
     if (!rec.extra.includes(line)) rec.extra.push(line);
   }
 
-  const ORG = /(ООО|ОАО|ЗАО|ПАО|АО|НАО|ИП|ГУП|МУП|АНО|НКО|Банк|банк|фонд|ФНС|УФНС|МИФНС|инспекция|управление)/;
-  const FIO = /^[А-ЯЁ][а-яё]+(?:-[А-ЯЁ][а-яё]+)?\s+[А-ЯЁ][а-яё.]+(?:\s+[А-ЯЁ][а-яё.]+)?$/;
+  const ORG = /(ООО|ОАО|ЗАО|ПАО|АО|НАО|ИП|ГУП|МУП|АНО|НКО|Банк|банк|фонд|ФНС|УФНС|МИФНС|инспекция|управление|служба)/;
+  const FIO = /^[А-ЯЁ][а-яё]+(?:-[А-ЯЁ][а-яё]+)?\s+[А-ЯЁ][а-яё.]*\.?(?:\s*[А-ЯЁ][а-яё.]*)?$/;
   /* «Финансовый управляющий Сидоров П.П.» — участник, а не подробность:
      от того, кто подал заявление, зависит весь состав обязанностей ФУ. */
   const MANAGER = /^(?:финансов|арбитражн|конкурсн|внешн|временн)[а-яё]*\s+управляющ/i;
@@ -239,8 +294,19 @@
   function looksLikeParty(line) {
     if (line.length > 140) return false;
     if (MANAGER.test(line)) return true;
+    // «О признании сделки недействительной», «Об отложении…» — содержание,
+    // даже если в нём названа организация («О включении требования ПАО…»).
+    if (/^(?:о|об|по|в|во|на|с|к|за)\s/i.test(line)) return false;
     if (/^[а-яё]/.test(line) && !ORG.test(line)) return false;
+    if (BARE_TYPE.test(line)) return false;
     return ORG.test(line) || FIO.test(line) || /^["«][^»"]{2,80}["»]$/.test(line);
+  }
+
+  /** Название документа для показа: тип и содержание вместе. */
+  function title(rec) {
+    if (!rec) return '';
+    if (rec.content) return `${rec.title}: ${rec.content}`;
+    return rec.title;
   }
 
   /**
@@ -262,10 +328,11 @@
         lines: all.length,
         records: recs.length,
         head: all.slice(0, 12),
-        withResponseTo: recs.filter((r) => r.responseTo).length
+        withResponseTo: recs.filter((r) => r.responseTo || r.responseToId).length,
+        withPdf: recs.filter((r) => r.pdf).length
       }
     };
   }
 
-  globalThis.KadCard = { parse, lines, htmlToText, records, meta, norm, CASE_NO };
+  globalThis.KadCard = { parse, lines, htmlToText, records, meta, norm, title, looksLikeParty, CASE_NO, GUID };
 })();

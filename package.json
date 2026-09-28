@@ -5,7 +5,17 @@
   "description": "Движение обособленного спора об оспаривании сделки должника по карточке kad.arbitr",
   "type": "module",
   "scripts": {
+    "start": "node server.mjs",
+    "start:window": "node server.mjs --window",
     "build": "node build.mjs",
-    "test": "node test/run.mjs"
+    "font": "node tools/fetch-font.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "pdfjs-dist": "^6.3.289",
+    "playwright-core": "^1.56.1"
+  },
+  "engines": {
+    "node": ">=22.13"
   }
 }
