@@ -86,7 +86,7 @@ export function startMock({ pdf, wall = false } = {}) {
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       return res.end(JSON.stringify(page(ITEMS, +u.searchParams.get('page') || 1)));
     }
-    if (u.pathname.startsWith('/Document/Pdf/') && pdf) {
+    if (/^\/(?:Document\/Pdf|Kad\/PdfDocument)\//.test(u.pathname) && pdf) {
       res.writeHead(200, { 'Content-Type': 'application/pdf' });
       return res.end(pdf);
     }

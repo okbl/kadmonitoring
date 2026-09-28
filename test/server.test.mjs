@@ -93,7 +93,7 @@ test('сервер: карточка по ссылке, PDF, отслежива�
   assert.ok(d.events.slice(1).every((e) => e.reasons.includes('ссылка на документ картотеки')));
   assert.deepEqual([d.hearing.date, d.hearing.time], ['2026-10-21', '14:20']);
   const act = d.events.find((e) => e.rec.date === '2026-09-16');
-  assert.match(act.rec.pdf, /^https:\/\/kad\.arbitr\.ru\/Document\/Pdf\//);
+  assert.match(act.rec.pdf, /^https:\/\/kad\.arbitr\.ru\/Kad\/PdfDocument\//);
 
   // Текст определения из PDF.
   const pdfRes = await srv.api(`/api/pdf?url=${encodeURIComponent(act.rec.pdf)}`);
