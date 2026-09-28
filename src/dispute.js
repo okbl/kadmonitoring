@@ -496,6 +496,10 @@
     return hit ? { date: hit.rec.date, doc: globalThis.KadCard.title(hit.rec) } : null;
   }
 
+  /* Стадии, после которых заседаний в первой инстанции уже не будет. */
+  const CLOSED = new Set(['decided', 'granted', 'partly', 'denied', 'terminated', 'unconsidered', 'returned', 'refused',
+    'appealDone', 'cassationDone']);
+
   /**
    * Короткая сводка для списка споров и для сервера: стадия, ближайший срок,
    * новые события. Считается тем же кодом, что и страница спора.
@@ -506,12 +510,14 @@
     const open = d.tasks.filter((t) => !t.done);
     const next = open.find((t) => t.due && t.due.date >= today) || null;
     const late = open.filter((t) => t.due && t.due.date < today).length;
+    // Прошедшее заседание разрешённого спора — уже не новость.
+    const hearing = d.hearing && (d.hearing.date >= today || !CLOSED.has(d.stage)) ? d.hearing : null;
     return {
       stage: d.stage,
       stageLabel: d.stage ? R.STAGES[d.stage].label : 'Нет данных',
       tone: d.stage ? R.STAGES[d.stage].tone : 'neutral',
       lastEvent: d.stageEvent ? { date: d.stageEvent.rec.date, doc: d.stageEvent.cls.doc } : null,
-      hearing: d.hearing,
+      hearing,
       nextDue: next ? { date: next.due.date, what: next.what.slice(0, 140) } : null,
       overdue: late,
       events: d.events.length,
@@ -520,5 +526,5 @@
     };
   }
 
-  globalThis.KadDispute = { build, summary, pointsTo, findRoot, rootCandidates, tokens, partyKey };
+  globalThis.KadDispute = { build, summary, CLOSED, pointsTo, findRoot, rootCandidates, tokens, partyKey };
 })();

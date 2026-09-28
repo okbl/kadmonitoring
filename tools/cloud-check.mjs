@@ -159,8 +159,13 @@ async function check(issue, spec, fetcher) {
     st.announced = true;
     write(file, st);
     log(`#${issue.number} ${a.summary.caseNo}: ${a.summary.stageLabel}; документов в споре ${a.d.events.length}; новых ${fresh.length}`);
+    // Стадия уточнилась без новых документов — например, загрузился текст
+    // определения, и стало видно, удовлетворено заявление или нет.
+    const was = prev && prev.summary && prev.summary.stage;
+    const changed = !first && was && was !== a.summary.stage;
     if (first) await comment(issue, report(st, a, null));
     else if (fresh.length) await comment(issue, report(st, a, fresh));
+    else if (changed) await comment(issue, report(st, a, null, `### Стадия уточнена: ${a.summary.stageLabel.toLowerCase()}`));
     else if (REPLY) await comment(issue, `Проверено: новых документов в споре нет. Стадия — ${a.summary.stageLabel.toLowerCase()}. [Открыть спор на сайте](${siteUrl(OWNER, NAME)}#c=${st.issue})`);
   } catch (err) {
     const msg = String(err.message || err).slice(0, 300);
@@ -174,14 +179,14 @@ async function check(issue, spec, fetcher) {
 
 /* ---------- сообщение в задачу ---------- */
 
-function report(st, a, fresh) {
+function report(st, a, fresh, heading) {
   const s = a.summary;
   const d = a.d;
   const link = `${siteUrl(OWNER, NAME)}#c=${st.issue}`;
   const out = [];
-  out.push(fresh
+  out.push(heading || (fresh
     ? `### Новые документы в споре: ${fresh.length}`
-    : '### Спор на отслеживании');
+    : '### Спор на отслеживании'));
   out.push(`**${s.caseNo || 'Дело'}** · заявление от ${D.fmt(st.filed)}${d.root && d.root.from ? ` · ${d.root.from}` : ''}`);
   if (fresh) {
     out.push(fresh.map((e) => `- ${D.fmt(e.rec.date)} — ${e.cls.doc}${e.rec.pdf ? ` ([PDF](${e.rec.pdf}))` : ''}`).join('\n'));
@@ -189,14 +194,15 @@ function report(st, a, fresh) {
   const st2 = d.stage ? R.STAGES[d.stage] : null;
   out.push(`**Стадия:** ${s.stageLabel}${st2 ? ` — ${st2.note.toLowerCase()}` : ''}.` +
     (s.lastEvent ? `\n**Последнее событие:** ${s.lastEvent.doc} от ${D.fmt(s.lastEvent.date)}.` : '') +
-    `\n**Заседание:** ${s.hearing ? `${D.fmt(s.hearing.date)}${s.hearing.time ? ' ' + s.hearing.time : ''}` : 'дата неизвестна'}.`);
+    (s.hearing ? `\n**Заседание:** ${D.fmt(s.hearing.date)}${s.hearing.time ? ' ' + s.hearing.time : ''}.`
+      : X.CLOSED.has(d.stage) ? '' : '\n**Заседание:** дата неизвестна.'));
   const open = d.tasks.filter((t) => !t.done).slice(0, 6);
   if (open.length) {
     out.push('**Что требуется от финансового управляющего:**\n' + open.map((t) =>
       `- ${t.due ? `**до ${D.fmt(t.due.date)}${t.due.approximate ? ' ≈' : ''}**` : '*без срока*'} — ${t.what.length > 320 ? t.what.slice(0, 320) + '…' : t.what} _(${t.norm})_` +
       (t.dueNote ? `\n  ${t.dueNote}` : '')).join('\n'));
   }
-  if (!fresh) {
+  if (!fresh && !heading) {
     out.push(`<details><summary>Документы спора: ${d.events.length}</summary>\n\n` +
       d.events.map((e) => `- ${D.fmt(e.rec.date)} — ${e.cls.doc}`).join('\n') + '\n</details>');
   }

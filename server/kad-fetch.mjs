@@ -87,12 +87,13 @@ export class KadFetcher {
     if (this.ctx) return this.ctx;
     const { chromium } = await playwright();
     fs.mkdirSync(this.profileDir, { recursive: true });
+    preferPdfDownload(this.profileDir);
     const base = {
       headless: !this.headful,
       viewport: { width: 1366, height: 900 },
       locale: 'ru-RU',
       timezoneId: 'Europe/Moscow',
-      acceptDownloads: false,
+      acceptDownloads: true,
       args: ['--disable-blink-features=AutomationControlled']
     };
     // Сначала браузер, указанный явно, затем установленные Chrome и Edge
@@ -221,25 +222,69 @@ export class KadFetcher {
       let buf = await direct(target);
       if (buf) return buf;
 
+      // Вкладка: проверка картотеки проходит сама, а PDF браузер не показывает,
+      // а скачивает (см. preferPdfDownload) — файл берётся из загрузки.
       const page = await ctx.newPage();
       let pdfUrl = null;
       try {
-        const seen = new Promise((resolve) => {
-          page.on('response', (r) => {
-            if (/pdf/i.test(r.headers()['content-type'] || '') && /^https?:/i.test(r.url())) resolve(r.url());
-          });
+        page.on('response', (r) => {
+          if (/pdf/i.test(r.headers()['content-type'] || '') && /^https?:/i.test(r.url())) pdfUrl = r.url();
         });
+        const download = page.waitForEvent('download', { timeout: 45000 }).catch(() => null);
         await page.goto(target, { waitUntil: 'commit', timeout: 60000 }).catch(() => {});
-        pdfUrl = await Promise.race([seen, wait(40000)]);
+        const d = await download;
+        if (d) {
+          const file = await d.path().catch(() => null);
+          buf = file && fs.existsSync(file) ? fs.readFileSync(file) : null;
+          await d.delete().catch(() => {});
+          if (isPdf(buf)) return buf;
+        }
       } finally {
         await Promise.race([page.close().catch(() => {}), wait(5000)]);
       }
-      if (!pdfUrl) throw new Error('картотека не пропустила к PDF за 40 секунд — документ ещё не опубликован или проверка не пройдена');
-      buf = await direct(pdfUrl) || await direct(target);
-      if (!buf) throw new Error('проверка картотеки пройдена, но PDF по прямой ссылке не отдан');
-      return buf;
+
+      // Запасной путь: запрос из страницы картотеки — с теми же cookies и
+      // заголовками браузера, что прошли проверку.
+      if (pdfUrl) {
+        buf = await direct(pdfUrl);
+        if (buf) return buf;
+        const kad = await ctx.newPage();
+        try {
+          await kad.goto(`${this.base}/`, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {});
+          const b64 = await kad.evaluate(async (u) => {
+            const r = await fetch(u, { credentials: 'include' });
+            const bytes = new Uint8Array(await r.arrayBuffer());
+            let s = '';
+            for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+            return btoa(s);
+          }, pdfUrl).catch(() => '');
+          buf = b64 ? Buffer.from(b64, 'base64') : null;
+          if (isPdf(buf)) return buf;
+        } finally {
+          await Promise.race([kad.close().catch(() => {}), wait(5000)]);
+        }
+      }
+      throw new Error(pdfUrl
+        ? 'проверка картотеки пройдена, но PDF получить не удалось'
+        : 'картотека не пропустила к PDF за 45 секунд — документ ещё не опубликован или проверка не пройдена');
     });
   }
+}
+
+/**
+ * Настройка профиля: PDF скачивать, а не открывать во встроенном
+ * просмотрщике. Из просмотрщика тело ответа не достать, а загрузку
+ * playwright отдаёт файлом. Chrome читает настройки из Default/Preferences.
+ */
+function preferPdfDownload(profileDir) {
+  const dir = path.join(profileDir, 'Default');
+  const file = path.join(dir, 'Preferences');
+  let prefs = {};
+  try { prefs = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (_) { /* профиль новый */ }
+  prefs.plugins = { ...(prefs.plugins || {}), always_open_pdf_externally: true };
+  prefs.download = { ...(prefs.download || {}), prompt_for_download: false };
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(prefs));
 }
 
 const wait = (ms) => new Promise((r) => setTimeout(() => r(null), ms));

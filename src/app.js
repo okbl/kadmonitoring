@@ -360,7 +360,9 @@
     if (h) {
       const n = D.until(h.date);
       const cls = n < 0 ? '' : n <= 7 ? 'warnT' : 'okT';
-      const note = n < 0 ? `прошло ${D.days(n)} назад — ждём судебный акт по его итогам` : leftText(h.date);
+      const note = n >= 0 ? leftText(h.date)
+        : X.CLOSED.has(d.stage) ? `прошло ${D.days(n)} назад — последнее известное заседание`
+        : `прошло ${D.days(n)} назад — ждём судебный акт по его итогам`;
       hTile = `<div class="t ${cls}"><div class="k">Судебное заседание</div>
         <div class="v">${D.fmt(h.date)}${h.time ? ` <span style="font-size:17px;font-weight:600">${esc(h.time)}</span>` : ''}</div>
         <div class="m">${esc(note)} · ${esc(h.source)}${h.text ? ` · ${esc(h.text)}` : ''}</div></div>`;
