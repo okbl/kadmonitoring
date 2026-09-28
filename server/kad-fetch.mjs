@@ -87,13 +87,12 @@ export class KadFetcher {
     if (this.ctx) return this.ctx;
     const { chromium } = await playwright();
     fs.mkdirSync(this.profileDir, { recursive: true });
-    preferPdfDownload(this.profileDir);
     const base = {
       headless: !this.headful,
       viewport: { width: 1366, height: 900 },
       locale: 'ru-RU',
       timezoneId: 'Europe/Moscow',
-      acceptDownloads: true,
+      acceptDownloads: false,
       args: ['--disable-blink-features=AutomationControlled']
     };
     // Сначала браузер, указанный явно, затем установленные Chrome и Edge
@@ -222,23 +221,32 @@ export class KadFetcher {
       let buf = await direct(target);
       if (buf) return buf;
 
-      // Вкладка: проверка картотеки проходит сама, а PDF браузер не показывает,
-      // а скачивает (см. preferPdfDownload) — файл берётся из загрузки.
+      // Вкладка: проверка картотеки проходит сама, а PDF перехватывается на
+      // уровне сети браузера (протокол DevTools, Fetch.getResponseBody) — до
+      // встроенного просмотрщика, из которого тело ответа не достать.
       const page = await ctx.newPage();
       let pdfUrl = null;
       try {
-        page.on('response', (r) => {
-          if (/pdf/i.test(r.headers()['content-type'] || '') && /^https?:/i.test(r.url())) pdfUrl = r.url();
+        const cdp = await ctx.newCDPSession(page);
+        const got = new Promise((resolve) => {
+          cdp.on('Fetch.requestPaused', async (ev) => {
+            try {
+              const ct = (ev.responseHeaders || []).find((h) => h.name.toLowerCase() === 'content-type');
+              if (ev.responseStatusCode === 200 && ct && /pdf/i.test(ct.value)) {
+                pdfUrl = ev.request.url;
+                const body = await cdp.send('Fetch.getResponseBody', { requestId: ev.requestId });
+                const b = Buffer.from(body.body, body.base64Encoded ? 'base64' : 'utf8');
+                if (isPdf(b)) resolve(b);
+              }
+            } catch (_) { /* ответ без тела */ }
+            cdp.send('Fetch.continueRequest', { requestId: ev.requestId }).catch(() => {});
+          });
         });
-        const download = page.waitForEvent('download', { timeout: 45000 }).catch(() => null);
+        await cdp.send('Fetch.enable', { patterns: [{ urlPattern: '*', requestStage: 'Response' }] });
         await page.goto(target, { waitUntil: 'commit', timeout: 60000 }).catch(() => {});
-        const d = await download;
-        if (d) {
-          const file = await d.path().catch(() => null);
-          buf = file && fs.existsSync(file) ? fs.readFileSync(file) : null;
-          await d.delete().catch(() => {});
-          if (isPdf(buf)) return buf;
-        }
+        buf = await Promise.race([got, wait(45000)]);
+        await cdp.send('Fetch.disable').catch(() => {});
+        if (isPdf(buf)) return buf;
       } finally {
         await Promise.race([page.close().catch(() => {}), wait(5000)]);
       }
@@ -269,22 +277,6 @@ export class KadFetcher {
         : 'картотека не пропустила к PDF за 45 секунд — документ ещё не опубликован или проверка не пройдена');
     });
   }
-}
-
-/**
- * Настройка профиля: PDF скачивать, а не открывать во встроенном
- * просмотрщике. Из просмотрщика тело ответа не достать, а загрузку
- * playwright отдаёт файлом. Chrome читает настройки из Default/Preferences.
- */
-function preferPdfDownload(profileDir) {
-  const dir = path.join(profileDir, 'Default');
-  const file = path.join(dir, 'Preferences');
-  let prefs = {};
-  try { prefs = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (_) { /* профиль новый */ }
-  prefs.plugins = { ...(prefs.plugins || {}), always_open_pdf_externally: true };
-  prefs.download = { ...(prefs.download || {}), prompt_for_download: false };
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(file, JSON.stringify(prefs));
 }
 
 const wait = (ms) => new Promise((r) => setTimeout(() => r(null), ms));
