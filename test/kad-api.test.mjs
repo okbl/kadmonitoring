@@ -42,8 +42,8 @@ test('определение «…и (или) применении послед�
   assert.equal(d.stage, 'decided');
   assert.equal(R.STAGES[d.stage].label, 'Вынесено определение по существу');
   const t = d.tasks.find((x) => /по существу спора/.test(x.what));
-  assert.equal(t.due.date, '2026-10-01', 'десять рабочих дней с 17.09.2026');
-  assert.match(t.dueNote, /до 19\.10\.2026/, 'срок картотеки показан рядом');
+  assert.equal(t.due.date, '2026-10-19', 'текста нет — срок обжалования из картотеки');
+  assert.match(t.due.text, /по данным картотеки/);
 
   const merits = card.records.find((r) => r.date === '2026-09-17');
   const denied = X.build(card, { filedDate: '2026-06-23', texts: { [merits.id]: 'О П Р Е Д Е Л И Л:\nВ удовлетворении заявления ПАО Сбербанк о признании сделки недействительной отказать.' } });
@@ -59,4 +59,16 @@ test('текст страницы без идентификаторов: чуж�
   assert.match(d2.root.from, /СБЕРБАНК/);
   assert.deepEqual(d2.events.map((e) => e.rec.date),
     ['2026-06-23', '2026-06-29', '2026-07-21', '2026-08-05', '2026-09-15', '2026-09-17']);
+});
+
+test('срок обжалования: текст определения важнее картотеки, картотека — важнее десяти дней', () => {
+  const merits = card.records.find((r) => r.date === '2026-09-17');
+  const text = 'О П Р Е Д Е Л И Л:\n1. Заявление удовлетворить.\n2. Признать недействительным договор.\n3. Определение может быть обжаловано в течение месяца со дня его принятия.';
+  const d2 = X.build(card, { filedDate: '2026-06-23', texts: { [merits.id]: text } });
+  const t = d2.tasks.find((x) => /вступление определения в силу/.test(x.what));
+  assert.equal(t.due.date, '2026-10-19', '17.09.2026 + месяц = 17.10 (суббота) → 19.10');
+  assert.match(t.due.text, /из текста определения/);
+  // Без текста — срок картотеки (AppealDate).
+  const t2 = d.tasks.find((x) => /по существу спора/.test(x.what));
+  assert.equal(t2.due.date, '2026-10-19');
 });

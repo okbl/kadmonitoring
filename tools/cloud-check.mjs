@@ -163,9 +163,14 @@ async function check(issue, spec, fetcher) {
     // определения, и стало видно, удовлетворено заявление или нет.
     const was = prev && prev.summary && prev.summary.stage;
     const changed = !first && was && was !== a.summary.stage;
+    // Ближайший срок сдвинулся — например, срок обжалования взят из текста.
+    const dueWas = prev && prev.summary && prev.summary.nextDue && prev.summary.nextDue.date;
+    const dueNow = a.summary.nextDue && a.summary.nextDue.date;
+    const dueMoved = !first && dueWas && dueNow && dueWas !== dueNow;
     if (first) await comment(issue, report(st, a, null));
     else if (fresh.length) await comment(issue, report(st, a, fresh));
     else if (changed) await comment(issue, report(st, a, null, `### Стадия уточнена: ${a.summary.stageLabel.toLowerCase()}`));
+    else if (dueMoved) await comment(issue, report(st, a, null, `### Срок уточнён: ближайший — ${D.fmt(dueNow)} (было ${D.fmt(dueWas)})`));
     else if (REPLY) await comment(issue, `Проверено: новых документов в споре нет. Стадия — ${a.summary.stageLabel.toLowerCase()}. [Открыть спор на сайте](${siteUrl(OWNER, NAME)}#c=${st.issue})`);
   } catch (err) {
     const msg = String(err.message || err).slice(0, 300);

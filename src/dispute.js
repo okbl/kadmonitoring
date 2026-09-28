@@ -438,16 +438,23 @@
         } else if (req.due && req.due.kind === 'beforeHearing') {
           if (ctx.hearing && ctx.hearing.date >= e.rec.date) due = { date: ctx.hearing.date, text: 'к судебному заседанию', norm: req.norm };
           else dueNote = 'дата заседания неизвестна — укажите её или загрузите текст определения';
+        } else if (req.due === R.APPEAL_10) {
+          // Срок обжалования: из текста определения, иначе из картотеки,
+          // иначе самый короткий — десять дней — с пометкой сверить.
+          const ap = e.ruling && e.ruling.appeal;
+          if (ap) {
+            const r = ap.months ? D.addMonths(e.rec.date, ap.months) : D.addWorkdays(e.rec.date, ap.days);
+            due = { date: r.date, approximate: r.approximate, quote: ap.quote,
+              text: `${ap.months ? D.plural(ap.months, 'месяц', 'месяца', 'месяцев').replace(/^/, ap.months + ' ') : ap.days + ' раб. дн.'} — срок из текста определения`,
+              norm: 'ст. 259, 114 АПК РФ' };
+          } else if (e.rec.appealUntil) {
+            due = { date: e.rec.appealUntil, text: 'срок обжалования по данным картотеки', norm: req.norm };
+          } else {
+            due = R.deadline(req.due, e.rec.date);
+            dueNote = 'Показан самый короткий срок — десять рабочих дней по ч. 3 ст. 223 АПК РФ. Суды в определениях по обособленным спорам часто указывают месяц: сверьте срок с текстом определения («может быть обжаловано… в течение…»).';
+          }
         } else if (req.due) {
           due = R.deadline(req.due, e.rec.date);
-          // Картотека сама считает срок обжалования акта. Если её срок позже
-          // десяти дней по ч. 3 ст. 223 АПК, показываем оба: ранний — как срок.
-          if (req.due === R.APPEAL_10 && e.rec.appealUntil && due && e.rec.appealUntil !== due.date) {
-            dueNote = `Картотека указывает срок обжалования до ${D.fmt(e.rec.appealUntil)}. ` +
-              (e.rec.appealUntil > due.date
-                ? `Здесь показан более ранний срок — десять рабочих дней по ч. 3 ст. 223 АПК РФ; какой срок применим к этому определению, проверьте по его тексту («может быть обжаловано в течение…»).`
-                : 'Проверьте срок по тексту определения.');
-          }
         }
 
         out.push({ what: req.what, norm: req.norm, due, dueNote, from: src, done: doneBy(req, e, events, ctx.role) });
