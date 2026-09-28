@@ -23,6 +23,8 @@ on:
     paths:
       - '.github/workflows/monitor.yml'
       - 'tools/cloud-check.mjs'
+      - 'server/**'
+      - 'src/**'
 
 permissions:
   contents: write
@@ -59,6 +61,7 @@ jobs:
           cp dist/index.html site/index.html
           touch site/.nojekyll
       - name: Проверка
+        timeout-minutes: 25
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           KAD_SCHEDULE: 'по будням каждые 2 часа с 7 до 19 МСК, в выходные — раз в день'

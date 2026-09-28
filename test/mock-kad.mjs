@@ -86,7 +86,14 @@ export function startMock({ pdf, wall = false } = {}) {
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       return res.end(JSON.stringify(page(ITEMS, +u.searchParams.get('page') || 1)));
     }
+    // Как у настоящей картотеки: без cookie проверки вместо PDF — страница со
+    // скриптом, который ставит cookie и уводит на /Document/Pdf/…?isAddStamp=True.
     if (/^\/(?:Document\/Pdf|Kad\/PdfDocument)\//.test(u.pathname) && pdf) {
+      if (!/(?:^|;\s*)passed=1/.test(req.headers.cookie || '')) {
+        const to = u.pathname.replace('/Kad/PdfDocument/', '/Document/Pdf/') + '?isAddStamp=True';
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        return res.end(`<!DOCTYPE html><html><body><script>setTimeout(function(){document.cookie='passed=1; path=/';location.href=${JSON.stringify(to)}},300)</script></body></html>`);
+      }
       res.writeHead(200, { 'Content-Type': 'application/pdf' });
       return res.end(pdf);
     }

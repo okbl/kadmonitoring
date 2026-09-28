@@ -202,40 +202,47 @@ export class KadFetcher {
    * PDF судебного акта → Buffer.
    *
    * На прямой запрос картотека отвечает не файлом, а страницей-проверкой:
-   * скрипт решает задачку, отправляет форму и перенаправляет на
-   * /Document/Pdf/…?isAddStamp=True. Поэтому PDF открывается во вкладке, как
-   * у человека, и берётся из ответа браузеру. Прямой запрос остаётся первым
-   * шагом: когда cookies после проверки уже есть, он быстрее.
+   * скрипт решает задачку, получает cookies и перенаправляет на
+   * /Document/Pdf/…?isAddStamp=True. Поэтому: прямой запрос; не вышло —
+   * вкладка проходит проверку и называет адрес файла; файл — снова прямым
+   * запросом, уже с cookies. Тело ответа из самой вкладки не берётся: PDF в
+   * ней открывает встроенный просмотрщик, и ответ может не отдаться никогда.
    */
   pdf(url) {
     return this.queue(async () => {
       const ctx = await this.context();
       const target = this.base === 'https://kad.arbitr.ru' ? url : url.replace(/^https?:\/\/kad\.arbitr\.ru/i, this.base);
-      const res = await ctx.request.get(target, { timeout: 60000, headers: { Referer: `${this.base}/` } }).catch(() => null);
-      if (res && res.ok()) {
+      const direct = async (u) => {
+        const res = await ctx.request.get(u, { timeout: 60000, headers: { Referer: `${this.base}/` } }).catch(() => null);
+        if (!res || !res.ok()) return null;
         const buf = await res.body().catch(() => null);
-        if (isPdf(buf)) return buf;
-      }
+        return isPdf(buf) ? buf : null;
+      };
+      let buf = await direct(target);
+      if (buf) return buf;
+
       const page = await ctx.newPage();
+      let pdfUrl = null;
       try {
-        const got = new Promise((resolve) => {
-          page.on('response', async (r) => {
-            if (!/pdf/i.test(r.headers()['content-type'] || '') || !/^https?:/i.test(r.url())) return;
-            const buf = await r.body().catch(() => null);
-            if (isPdf(buf)) resolve(buf);
+        const seen = new Promise((resolve) => {
+          page.on('response', (r) => {
+            if (/pdf/i.test(r.headers()['content-type'] || '') && /^https?:/i.test(r.url())) resolve(r.url());
           });
         });
         await page.goto(target, { waitUntil: 'commit', timeout: 60000 }).catch(() => {});
-        const buf = await Promise.race([got, new Promise((r) => setTimeout(() => r(null), 45000))]);
-        if (!buf) throw new Error('картотека не отдала PDF за 45 секунд — документ ещё не опубликован или проверка не пройдена');
-        return buf;
+        pdfUrl = await Promise.race([seen, wait(40000)]);
       } finally {
-        await page.close().catch(() => {});
+        await Promise.race([page.close().catch(() => {}), wait(5000)]);
       }
+      if (!pdfUrl) throw new Error('картотека не пропустила к PDF за 40 секунд — документ ещё не опубликован или проверка не пройдена');
+      buf = await direct(pdfUrl) || await direct(target);
+      if (!buf) throw new Error('проверка картотеки пройдена, но PDF по прямой ссылке не отдан');
+      return buf;
     });
   }
 }
 
+const wait = (ms) => new Promise((r) => setTimeout(() => r(null), ms));
 const isPdf = (buf) => buf && buf.length > 4 && buf.subarray(0, 5).toString('latin1') === '%PDF-';
 
 async function userAgent(ctx) {
