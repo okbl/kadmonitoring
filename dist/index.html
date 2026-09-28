@@ -864,7 +864,8 @@ a.btn{text-decoration:none;display:inline-block}
     if (dm) debtor = dm[1].trim();
 
     let judge = '';
-    const jm = text.match(/суд(?:ья|ьи)[:\s]+([^\n]{3,80})/i);
+    // «Судья: …» в начале строки; «Суды и судьи» — заголовок вкладки картотеки.
+    const jm = text.match(/^судья[:\s]+([^\n]{3,80})$/im);
     if (jm) judge = jm[1].trim();
 
     const filed = (() => {
