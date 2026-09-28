@@ -215,6 +215,16 @@ body.ext .noext{display:none!important}
 .btn.busy{opacity:.7;cursor:progress}
 a.btn{text-decoration:none;display:inline-block}
 
+/* ---------- установка расширения ---------- */
+.install{margin-top:14px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+  padding:18px 22px;display:flex;gap:22px;align-items:flex-start;box-shadow:var(--shadow)}
+.install h3{font-size:15px;margin-bottom:6px}
+.install p,.install li{font-size:13.5px;color:var(--ink-2);line-height:1.55}
+.install p{margin:0 0 8px}
+.install ol{margin:0;padding-left:20px}
+.install .btn{flex:none;white-space:nowrap}
+@media (max-width:760px){.install{flex-direction:column}}
+
 /* ---------- список отслеживаемых споров ---------- */
 .list{padding:22px 0 0}
 .list .lhead{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
@@ -411,6 +421,23 @@ a.btn{text-decoration:none;display:inline-block}
     «В ответ на», которым картотека связывает документы с заявлением, — покажет его движение,
     текущую стадию и то, что требуется от финансового управляющего, со ссылками на нормы и
     расчётом сроков.
+  </div>
+  <div class="install off">
+    <div>
+      <h3>Чтобы карточки загружались и проверялись сами — расширение для браузера</h3>
+      <p>Расширение «Обособленный спор» открывает карточку kad.arbitr в вашем браузере, забирает
+      хронологию дела и тексты определений, проверяет отслеживаемые споры по расписанию и сообщает
+      о новых документах. Список споров у каждого свой и хранится <b>только в его браузере</b> —
+      никуда не отправляется. Работает в Chrome, Edge и Яндекс Браузере.</p>
+      <ol>
+        <li>Скачайте архив и распакуйте его в папку, которую не будете удалять.</li>
+        <li>Откройте страницу расширений: <code>chrome://extensions</code>, в Edge — <code>edge://extensions</code>,
+          в Яндекс Браузере — <code>browser://extensions</code>.</li>
+        <li>Включите «Режим разработчика» и нажмите «Загрузить распакованное расширение».</li>
+        <li>Выберите распакованную папку <b>kad-spor-extension</b>. Значок расширения откроет «Мои споры».</li>
+      </ol>
+    </div>
+    <a class="btn pri" href="kad-spor-extension.zip" download>Скачать расширение</a>
   </div>
 </div>
 

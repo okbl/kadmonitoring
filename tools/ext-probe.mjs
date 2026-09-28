@@ -25,9 +25,10 @@ writeDir(dir, extensionFiles({ debuggerAtInstall: true }));
 
 const t0 = Date.now();
 const sec = () => `${((Date.now() - t0) / 1000).toFixed(0)} с`;
+// Облегчённый Chromium Headless Shell расширений не умеет — нужен полный Chromium.
 const ctx = await chromium.launchPersistentContext(path.join(tmp, 'profile'), {
   headless: true,
-  executablePath: process.env.KAD_CHROMIUM || undefined,
+  ...(process.env.KAD_CHROMIUM ? { executablePath: process.env.KAD_CHROMIUM } : { channel: 'chromium' }),
   args: [`--disable-extensions-except=${dir}`, `--load-extension=${dir}`]
 });
 let failed = false;
