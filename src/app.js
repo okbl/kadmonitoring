@@ -36,6 +36,7 @@
   let card = null;
   let dispute = null;
   let server = null;       // ответ /api/ping, если страницу отдал сервер
+  let cloud = null;        // data/index.json, если споры проверяет GitHub Actions
   const opened = new Set();  // раскрытые события переживают перерисовку
 
   /* ---------- мелочи ---------- */
@@ -321,6 +322,7 @@
     const when = S.card.at ? ` · ${S.card.source || 'вставка'} от ${D.fmt(S.card.at.slice(0, 10))}` : '';
     let msg = `В карточке ${g.records} ${docWord(g.records)}, к спору относятся ${d.events.length}${when}`;
     if (!g.withResponseTo) msg += '. Поля «В ответ на» нет ни у одного документа — связи не установить, проверьте «Возможно относится»';
+    else if (!d.rootFound && d.root && d.root.inferred) msg += '. Самого заявления в хронологии картотеки нет — спор собран по ссылкам «В ответ на» на него';
     else if (!d.rootFound && S.filed) msg += '. Заявление от этой даты в карточке не найдено — возможно, оно ещё не опубликовано';
     echo('pasteEcho', msg, !g.withResponseTo);
   }
@@ -452,7 +454,9 @@
     if (e.stage) badges.push(`<span class="b stage">${esc(R.STAGES[e.stage].label)}</span>`);
     badges.push(`<span class="b ${conf[0]}">${conf[1]}</span>`);
     if (e.ruling) badges.push('<span class="b">текст разобран</span>');
-    if (r.synthetic) badges.push('<span class="b likely">в карточке пока нет</span>');
+    if (r.synthetic) badges.push(r.inferred
+      ? '<span class="b">восстановлено по ссылкам</span>'
+      : '<span class="b likely">в карточке пока нет</span>');
 
     const rows = [];
     const row = (label, value) => { if (value) rows.push(`<div class="lbl">${label}</div><p>${value}</p>`); };
@@ -471,7 +475,7 @@
         <textarea data-text="${esc(r.id)}" placeholder="Вставьте текст судебного акта — программа найдёт сроки, дату заседания и поручения управляющему">${esc(S.texts[r.id] || '')}</textarea>
         <div class="acts noprint">
           <button class="btn btn-sm" data-act="text" data-id="${esc(r.id)}">Разобрать текст</button>
-          ${r.pdf ? `<button class="btn btn-sm srv" data-act="pdf" data-id="${esc(r.id)}">Загрузить текст из PDF</button>` : ''}
+          ${r.pdf ? `<button class="btn btn-sm srv nocld" data-act="pdf" data-id="${esc(r.id)}">Загрузить текст из PDF</button>` : ''}
           ${S.texts[r.id] ? `<button class="linkbtn" data-act="untext" data-id="${esc(r.id)}">убрать текст</button>` : ''}
         </div>
         ${e.ruling ? rulingHtml(e.ruling) : ''}`;
@@ -739,7 +743,7 @@
     history.replaceState(null, '', location.pathname);
     $('list').innerHTML = '<div class="note">Загружаю список…</div>';
     try {
-      const items = await api('/api/disputes');
+      const items = cloud ? (await loadCloudIndex()).items : await api('/api/disputes');
       renderList(items);
     } catch (err) {
       $('list').innerHTML = `<div class="note warn">Список не загружен: ${esc(err.message)}</div>`;
@@ -747,10 +751,18 @@
   }
 
   function renderList(items) {
-    const hours = server && server.checkHours;
-    $('listNote').textContent = hours ? `сервер проверяет карточки каждые ${hours} ч` : 'плановая проверка выключена';
+    if (cloud) {
+      $('listNote').textContent = `проверяет GitHub${cloud.schedule ? ': ' + cloud.schedule : ''}` +
+        (cloud.updatedAt ? ` · обновлено ${when(cloud.updatedAt)}` : '');
+      $('linkRunAll').href = `https://github.com/${cloud.repo}/actions/workflows/monitor.yml`;
+    } else {
+      const hours = server && server.checkHours;
+      $('listNote').textContent = hours ? `сервер проверяет карточки каждые ${hours} ч` : 'плановая проверка выключена';
+    }
     if (!items.length) {
-      $('list').innerHTML = '<div class="note">Отслеживаемых споров пока нет. Нажмите «Новый спор», укажите дату подачи и ссылку на карточку, загрузите её и нажмите «Сохранить спор».</div>';
+      $('list').innerHTML = cloud
+        ? '<div class="note">Отслеживаемых споров пока нет. Нажмите «Новый спор», укажите дату подачи и ссылку на карточку и нажмите «Отслеживать на GitHub».</div>'
+        : '<div class="note">Отслеживаемых споров пока нет. Нажмите «Новый спор», укажите дату подачи и ссылку на карточку, загрузите её и нажмите «Сохранить спор».</div>';
       return;
     }
     $('list').innerHTML = items.map((it) => {
@@ -764,15 +776,18 @@
           <span class="s">${s.lastEvent ? `${esc(s.lastEvent.doc)} от ${D.fmt(s.lastEvent.date)}` : ''}</span></div>
         <div><span class="s">${esc(hearing)}</span>
           <span class="s ${s.overdue ? 'acc' : ''}">${s.overdue ? `истекло сроков: ${s.overdue} · ` : ''}${esc(next.slice(0, 120))}</span>
-          <span class="s">${it.checkedAt ? `проверено ${new Date(it.checkedAt).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}` : 'ещё не проверялось'}${it.error ? ` · <span style="color:var(--acc)">${esc(it.error)}</span>` : ''}</span></div>
-        <div class="r">${s.newEvents ? `<span class="b new">новое: ${s.newEvents}</span>` : ''}
+          <span class="s">${it.checkedAt ? `проверено ${when(it.checkedAt)}` : 'ещё не проверялось'}${it.error ? ` · <span style="color:var(--acc)">${esc(it.error)}</span>` : ''}</span></div>
+        <div class="r">${cloud
+          ? `<a class="btn btn-sm" href="https://github.com/${esc(cloud.repo)}/issues/${esc(it.issue)}" target="_blank" rel="noopener noreferrer">задача #${esc(it.issue)}</a>`
+          : `${s.newEvents ? `<span class="b new">новое: ${s.newEvents}</span>` : ''}
           <button class="btn btn-sm" data-check="${esc(it.id)}">Проверить</button>
-          <button class="linkbtn" data-del="${esc(it.id)}">удалить</button></div>
+          <button class="linkbtn" data-del="${esc(it.id)}">удалить</button>`}</div>
       </div>`;
     }).join('');
   }
 
   $('list').addEventListener('click', async (e) => {
+    if (e.target.closest('a')) return;
     const chk = e.target.closest('[data-check]');
     const del = e.target.closest('[data-del]');
     const row = e.target.closest('[data-open]');
@@ -793,10 +808,11 @@
 
   async function openFromServer(id) {
     try {
-      const obj = await api(`/api/disputes/${encodeURIComponent(id)}`);
+      const obj = cloud ? await cloudDispute(id) : await api(`/api/disputes/${encodeURIComponent(id)}`);
       showForm();
       openState(obj);
-      history.replaceState(null, '', `#d=${id}`);
+      if (cloud) remember(id, S.known);
+      history.replaceState(null, '', `#${cloud ? 'c' : 'd'}=${id}`);
       scheduleSave();
     } catch (err) {
       toast(`Спор не открыт: ${err.message}`);
@@ -831,6 +847,59 @@
     } finally { done(); showList(); }
   });
 
+  /* ---------- облако: споры проверяет GitHub Actions ---------- */
+
+  const when = (iso) => new Date(iso).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  /* Сводку публикует tools/cloud-check.mjs рядом со страницей. */
+  async function loadCloudIndex() {
+    if (!/^https?:$/.test(location.protocol)) throw new Error('страница открыта с диска');
+    const r = await fetch('data/index.json', { cache: 'no-store' });
+    if (!r.ok) throw new Error(`data/index.json: ${r.status}`);
+    const j = await r.json();
+    if (!j || j.app !== 'kadmonitoring') throw new Error('это не сводка споров');
+    cloud = j;
+    return j;
+  }
+
+  async function cloudDispute(id) {
+    if (!/^\d+$/.test(String(id))) throw new Error('нет такого спора');
+    const r = await fetch(`data/${id}.json`, { cache: 'no-store' });
+    if (!r.ok) throw new Error(`спор не найден (${r.status})`);
+    const obj = await r.json();
+    // «Новое» — относительно того, что видел этот браузер; хранится в нём же.
+    obj.known = seenIn(id);
+    return obj;
+  }
+
+  function seenIn(id) {
+    try { const v = JSON.parse(localStorage.getItem(`kad-seen-${id}`) || 'null'); return Array.isArray(v) ? v : null; }
+    catch (_) { return null; }
+  }
+  function remember(id, ids) {
+    try { if (ids) localStorage.setItem(`kad-seen-${id}`, JSON.stringify(ids)); } catch (_) { /* приватный режим */ }
+  }
+
+  /* Поставить спор на отслеживание: готовая задача на GitHub, её остаётся отправить. */
+  $('btnTrack').addEventListener('click', () => {
+    readDate();
+    readUrl();
+    if (!S.filed) { toast('Укажите дату подачи заявления'); dateInput.focus(); return; }
+    if (!KAD_URL.test(S.url)) { toast('Нужна ссылка на карточку kad.arbitr.ru'); $('urlInput').focus(); return; }
+    const role = S.role === 'applicant' ? 'заявитель' : S.role === 'participant' ? 'участник' : '(необязательно: заявитель или участник)';
+    const title = `Спор: заявление от ${D.fmt(S.filed)}${card && card.meta.caseNo ? `, дело ${card.meta.caseNo}` : ''}`;
+    const body = [
+      `Дата подачи: ${D.fmt(S.filed)}`,
+      `Ссылка: ${S.url.match(KAD_URL)[0]}`,
+      `Заявитель: ${S.applicant || '(необязательно)'}`,
+      `Роль управляющего: ${role}`,
+      '',
+      'Эта задача — отслеживаемый спор. Карточка проверяется по расписанию, о новых документах появится комментарий. Чтобы проверить сейчас, напишите «проверить». Закройте задачу, чтобы снять спор с отслеживания.'
+    ].join('\n');
+    window.open(`https://github.com/${cloud.repo}/issues/new?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`, '_blank', 'noopener');
+    echo('pasteEcho', 'Отправьте задачу на GitHub («Submit new issue»). Через 1–3 минуты спор появится в «Моих спорах», а в задаче — первый отчёт.');
+  });
+
   /* ---------- прочее ---------- */
 
   $('btnHelp').addEventListener('click', () => $('help').showModal());
@@ -852,11 +921,15 @@
         if (r.ok) server = await r.json();
       } catch (_) { server = null; }
     }
-    document.body.classList.toggle('server', !!server);
+    if (!server) {
+      try { await loadCloudIndex(); } catch (_) { cloud = null; }
+    }
+    document.body.classList.toggle('server', !!(server || cloud));
+    document.body.classList.toggle('cloud', !!cloud);
     readUrl();
-    if (!server) return;
+    if (!server && !cloud) return;
     $('btnSave').textContent = 'Сохранить спор';
-    const m = location.hash.match(/^#d=([\w-]+)$/);
+    const m = location.hash.match(/^#[dc]=([\w-]+)$/);
     if (m) openFromServer(m[1]);
     else showList();
   }

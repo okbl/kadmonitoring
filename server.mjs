@@ -25,6 +25,7 @@ import { fileURLToPath } from 'url';
 import { assemble } from './build.mjs';
 import { KadFetcher } from './server/kad-fetch.mjs';
 import { pdfText } from './server/pdf-text.mjs';
+import { chooseText } from './server/card-text.mjs';
 import './src/dates.js';
 import './src/kad.js';
 import './src/rules.js';
@@ -130,32 +131,13 @@ const isAct = (e) => !e.rec.synthetic && /^(?:ruling|decision|appealRuling|proto
 
 /* ---------- обращение к картотеке ---------- */
 
-/**
- * Из двух текстов — страницы и API картотеки — берётся тот, где больше
- * записей. К тексту API приписывается шапка дела со страницы: номер, суд,
- * должник в записях API не повторяются.
- */
-function chooseText(r, url) {
-  const page = r.pageText ? KadCard.parse(r.pageText) : null;
-  const api = r.apiText ? KadCard.parse(r.apiText) : null;
-  const pn = page ? page.records.length : 0;
-  const an = api ? api.records.length : 0;
-  if (an && an >= pn) {
-    const m = (page && page.meta) || {};
-    const head = [m.caseNo, m.court, m.debtor && `Должник: ${m.debtor}`, m.judge && `Судья: ${m.judge}`, url].filter(Boolean);
-    return { text: `${head.join('\n')}\n${r.apiText}`, note: `Карточка загружена: ${an} документов из хронологии картотеки` };
-  }
-  if (pn) return { text: r.pageText, note: `Карточка загружена: ${pn} документов по тексту страницы` };
-  throw new HttpError(502, 'в загруженной карточке не найдено ни одного документа — возможно, картотека изменила вёрстку. Вставьте страницу вручную (Ctrl+A, Ctrl+C)');
-}
-
 async function fetchCard(url) {
   try {
     const r = await fetcher.card(url);
     return { ...chooseText(r, url), at: r.at };
   } catch (e) {
     if (e instanceof HttpError) throw e;
-    throw new HttpError(502, e.message);
+    throw new HttpError(e.status || 502, e.message);
   }
 }
 

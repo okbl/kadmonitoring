@@ -1,0 +1,79 @@
+# Облачная проверка споров: GitHub сам загружает карточки kad.arbitr,
+# разбирает их и публикует результат на сайте (ветка gh-pages, папка data).
+#
+# Спор — открытая задача со ссылкой на карточку и датой подачи. Проверяются:
+#   — все споры — по расписанию;
+#   — один спор — сразу, как задачу открыли или изменили, и по комментарию
+#     «проверить».
+# Расписание и события задач GitHub выполняет только из ветки по умолчанию.
+name: Проверка споров
+
+on:
+  schedule:
+    # Время UTC: по будням каждые два часа с 7:17 до 19:17 МСК, в выходные — раз в день.
+    - cron: '17 4-16/2 * * 1-5'
+    - cron: '17 6 * * 0,6'
+  issues:
+    types: [opened, edited, reopened, closed]
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+  push:
+    branches: [claude/dispute-tracking-system-6v3mr1]
+    paths:
+      - '.github/workflows/monitor.yml'
+      - 'tools/cloud-check.mjs'
+
+permissions:
+  contents: write
+  issues: write
+
+# Проверки идут по одной: обе пишут в gh-pages.
+concurrency:
+  group: kad-monitor
+  cancel-in-progress: false
+
+jobs:
+  check:
+    if: >-
+      github.event_name != 'issue_comment' ||
+      (github.event.comment.user.type != 'Bot' && contains(github.event.comment.body, 'проверить'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Сайт (ветка gh-pages)
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: site
+      - name: Сборка страницы
+        run: |
+          node tools/fetch-font.mjs || echo "шрифт не скачан — будет системный"
+          node build.mjs
+          cp dist/index.html site/index.html
+          touch site/.nojekyll
+      - name: Проверка
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          KAD_SCHEDULE: 'по будням каждые 2 часа с 7 до 19 МСК, в выходные — раз в день'
+        run: |
+          ARGS="--site site"
+          if [ -n "${{ github.event.issue.number }}" ]; then ARGS="$ARGS --issue ${{ github.event.issue.number }}"; fi
+          if [ "${{ github.event_name }}" = "issue_comment" ]; then ARGS="$ARGS --reply"; fi
+          node tools/cloud-check.mjs $ARGS
+      - name: Публикация
+        working-directory: site
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then echo "без изменений"; exit 0; fi
+          git commit -q -m "Проверка споров: $(date -u +%Y-%m-%dT%H:%MZ)"
+          for i in 1 2 3; do git pull -q --rebase origin gh-pages && git push -q origin HEAD:gh-pages && exit 0; sleep 5; done
+          exit 1
