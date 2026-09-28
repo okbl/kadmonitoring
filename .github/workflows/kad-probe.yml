@@ -1,0 +1,35 @@
+# Проба: пускает ли kad.arbitr.ru серверы GitHub и как устроена настоящая
+# карточка. Запускается при изменении самой пробы; результат — в журнале.
+name: kad-probe
+
+on:
+  push:
+    paths:
+      - '.github/workflows/kad-probe.yml'
+      - 'tools/kad-probe.mjs'
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: Без окна (Chrome с раннера)
+        id: headless
+        continue-on-error: true
+        run: node tools/kad-probe.mjs https://kad.arbitr.ru/Card/2aa24115-6d6f-4b9e-9c17-cd43a0bd8ef5 23.06.2026
+      - name: С окном под Xvfb
+        if: steps.headless.outcome == 'failure'
+        continue-on-error: true
+        env:
+          KAD_WINDOW: '1'
+        run: |
+          sudo apt-get install -y xvfb >/dev/null
+          xvfb-run -a node tools/kad-probe.mjs https://kad.arbitr.ru/Card/2aa24115-6d6f-4b9e-9c17-cd43a0bd8ef5 23.06.2026
+      - name: Откуда запрос
+        run: curl -sS https://ipinfo.io/json | grep -E '"(ip|country|org)"' || true
