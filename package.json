@@ -9,7 +9,8 @@
     "start:window": "node server.mjs --window",
     "build": "node build.mjs",
     "font": "node tools/fetch-font.mjs",
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "pages": "node tools/publish-pages.mjs"
   },
   "dependencies": {
     "pdfjs-dist": "^6.3.289",
