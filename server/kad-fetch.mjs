@@ -160,7 +160,10 @@ export class KadFetcher {
           at: new Date().toISOString(),
           pageText,
           apiItems: items.length,
-          apiText: items.length ? itemsToText(items, caseId) : ''
+          apiText: items.length ? itemsToText(items, caseId) : '',
+          // Для диагностики (tools/kad-probe.mjs): что именно отдал API.
+          apiRaw: items,
+          apiUrls: captured.map((c) => c.url)
         };
       } finally {
         await page.close().catch(() => {});
@@ -457,7 +460,7 @@ export function itemsToText(items, caseId, base = 'https://kad.arbitr.ru') {
 
     const file = pick(it, /^(?:FileName|File)$/i);
     const docCase = String(it.CaseId || caseId || '');
-    if (file && id && docCase) lines.push(`PDF: ${base}/Document/Pdf/${docCase}/${id}/${encodeURIComponent(String(file))}`);
+    if (file && id && docCase) lines.push(`PDF: ${base}/Kad/PdfDocument/${docCase}/${id}/${encodeURIComponent(String(file))}`);
     blocks.push(lines.join('\n'));
   }
   return blocks.join('\n');
