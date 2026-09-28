@@ -139,7 +139,8 @@
       .replace(/ /g, ' ')
       .replace(/\r/g, '')
       .split('\n')
-      .map((l) => l.replace(/[\t ]+/g, ' ').trim())
+      // «[Подписано]» — отметка картотеки об электронной подписи, не название.
+      .map((l) => l.replace(/[\t ]+/g, ' ').trim().replace(/^\[подписано\]\s*/i, ''))
       .filter((l) => l && l !== '·' && l !== '—' && l !== '-' && !NOISE.some((re) => re.test(l)));
   }
 

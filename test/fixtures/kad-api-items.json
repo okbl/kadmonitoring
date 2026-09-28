@@ -1,0 +1,358 @@
+{
+ "caseId": "11111111-2222-4333-8444-555555555555",
+ "root": "aaaaaaaa-0000-4000-8000-000000000001",
+ "items": [
+  {
+   "CaseId": "11111111-2222-4333-8444-555555555555",
+   "InstanceId": "inst-1",
+   "Id": "cccccccc-0000-4000-8000-000000000010",
+   "InstStage": 12,
+   "DocStage": 0,
+   "PublishDate": null,
+   "DisplayDate": "22.05.2026",
+   "PublishDisplayDate": "",
+   "AppealDate": null,
+   "ReasonDocumentId": null,
+   "Content": null,
+   "Judges": [],
+   "Declarers": [
+    {
+     "Id": "00000000-0000-0000-0000-000000000000",
+     "Organization": "ПАО \"СБЕРБАНК РОССИИ\"",
+     "Address": "г. Москва",
+     "Type": 1
+    }
+   ],
+   "FileName": "",
+   "AdditionalInfo": "",
+   "IsDeleted": false,
+   "Date": "/Date(1779440400000)/",
+   "Type": 0,
+   "IsAct": false,
+   "HearingDate": null,
+   "ContentTypes": [
+    "О признании сделки должника недействительной"
+   ],
+   "DocumentTypeName": "Заявление",
+   "HearingPlace": null,
+   "CourtName": "АС Свердловской области",
+   "InstanceLevel": 1
+  },
+  {
+   "CaseId": "11111111-2222-4333-8444-555555555555",
+   "InstanceId": "inst-1",
+   "Id": "cccccccc-0000-4000-8000-000000000011",
+   "InstStage": 12,
+   "DocStage": 0,
+   "PublishDate": null,
+   "DisplayDate": "23.06.2026",
+   "PublishDisplayDate": "",
+   "AppealDate": null,
+   "ReasonDocumentId": "bbbbbbbb-0000-4000-8000-000000000002",
+   "Content": null,
+   "Judges": [
+    {
+     "Id": "j",
+     "Name": "Петрова А. В.",
+     "Role": "Судья-докладчик",
+     "Group": "11 судебный состав"
+    }
+   ],
+   "Declarers": [],
+   "FileName": "",
+   "AdditionalInfo": "Штрихкод: 0031000001 В ответ на Заявление (22.05.2026) от ПАО \"СБЕРБАНК РОССИИ\"",
+   "IsDeleted": false,
+   "Date": "/Date(1782205200000)/",
+   "Type": 0,
+   "IsAct": true,
+   "HearingDate": null,
+   "ContentTypes": [
+    "Перерыв в заседании"
+   ],
+   "DocumentTypeName": "Определение",
+   "HearingPlace": null,
+   "CourtName": "АС Свердловской области",
+   "InstanceLevel": 1
+  },
+  {
+   "CaseId": "11111111-2222-4333-8444-555555555555",
+   "InstanceId": "inst-1",
+   "Id": "cccccccc-0000-4000-8000-000000000012",
+   "InstStage": 12,
+   "DocStage": 0,
+   "PublishDate": null,
+   "DisplayDate": "23.06.2026",
+   "PublishDisplayDate": "",
+   "AppealDate": null,
+   "ReasonDocumentId": null,
+   "Content": null,
+   "Judges": [],
+   "Declarers": [
+    {
+     "Id": "00000000-0000-0000-0000-000000000000",
+     "Organization": "ПАО \"СБЕРБАНК РОССИИ\"",
+     "Address": "г. Москва",
+     "Type": 1
+    }
+   ],
+   "FileName": "",
+   "AdditionalInfo": "",
+   "IsDeleted": false,
+   "Date": "/Date(1782205200000)/",
+   "Type": 0,
+   "IsAct": false,
+   "HearingDate": null,
+   "ContentTypes": [
+    "Ходатайство о приобщении к делу дополнительных документов"
+   ],
+   "DocumentTypeName": "Ходатайства",
+   "HearingPlace": null,
+   "CourtName": "АС Свердловской области",
+   "InstanceLevel": 1
+  },
+  {
+   "CaseId": "11111111-2222-4333-8444-555555555555",
+   "InstanceId": "inst-1",
+   "Id": "cccccccc-0000-4000-8000-000000000013",
+   "InstStage": 12,
+   "DocStage": 0,
+   "PublishDate": null,
+   "DisplayDate": "29.06.2026",
+   "PublishDisplayDate": "",
+   "AppealDate": null,
+   "ReasonDocumentId": "aaaaaaaa-0000-4000-8000-000000000001",
+   "Content": null,
+   "Judges": [
+    {
+     "Id": "j",
+     "Name": "Петрова А. В.",
+     "Role": "Судья-докладчик",
+     "Group": "11 судебный состав"
+    }
+   ],
+   "Declarers": [],
+   "FileName": "A60-1-2026_20260629_Opredelenie.pdf",
+   "AdditionalInfo": "Штрихкод: 0031000002 В ответ на Заявление (23.06.2026) от ПАО \"СБЕРБАНК РОССИИ\", Дата и время судебного заседания 21.07.2026, 11:30, зал № 602",
+   "IsDeleted": false,
+   "Date": "/Date(1782723600000)/",
+   "Type": 0,
+   "IsAct": true,
+   "HearingDate": "/Date(1784622600000)/",
+   "ContentTypes": [
+    "О принятии заявления (ходатайства) к рассмотрению"
+   ],
+   "DocumentTypeName": "Определение",
+   "HearingPlace": "зал № 602",
+   "CourtName": "АС Свердловской области",
+   "InstanceLevel": 1
+  },
+  {
+   "CaseId": "11111111-2222-4333-8444-555555555555",
+   "InstanceId": "inst-1",
+   "Id": "cccccccc-0000-4000-8000-000000000014",
+   "InstStage": 12,
+   "DocStage": 0,
+   "PublishDate": null,
+   "DisplayDate": "09.07.2026",
+   "PublishDisplayDate": "",
+   "AppealDate": null,
+   "ReasonDocumentId": "bbbbbbbb-0000-4000-8000-000000000002",
+   "Content": null,
+   "Judges": [],
+   "Declarers": [
+    {
+     "Id": "00000000-0000-0000-0000-000000000000",
+     "Organization": "ПАО \"СБЕРБАНК РОССИИ\"",
+     "Address": "г. Москва",
+     "Type": 1
+    }
+   ],
+   "FileName": "",
+   "AdditionalInfo": "В ответ на Заявление (22.05.2026) от ПАО \"СБЕРБАНК РОССИИ\"",
+   "IsDeleted": false,
+   "Date": "/Date(1783587600000)/",
+   "Type": 0,
+   "IsAct": false,
+   "HearingDate": null,
+   "ContentTypes": [
+    "Заявление об истребовании доказательств"
+   ],
+   "DocumentTypeName": "Заявление",
+   "HearingPlace": null,
+   "CourtName": "АС Свердловской области",
+   "InstanceLevel": 1
+  },
+  {
+   "CaseId": "11111111-2222-4333-8444-555555555555",
+   "InstanceId": "inst-1",
+   "Id": "cccccccc-0000-4000-8000-000000000015",
+   "InstStage": 12,
+   "DocStage": 0,
+   "PublishDate": null,
+   "DisplayDate": "21.07.2026",
+   "PublishDisplayDate": "",
+   "AppealDate": null,
+   "ReasonDocumentId": "aaaaaaaa-0000-4000-8000-000000000001",
+   "Content": null,
+   "Judges": [
+    {
+     "Id": "j",
+     "Name": "Петрова А. В.",
+     "Role": "Судья-докладчик",
+     "Group": "11 судебный состав"
+    }
+   ],
+   "Declarers": [],
+   "FileName": "A60-1-2026_20260721_Opredelenie.pdf",
+   "AdditionalInfo": "Штрихкод: 0031000003 В ответ на Заявление (23.06.2026) от ПАО \"СБЕРБАНК РОССИИ\", Дата и время судебного заседания 15.09.2026, 10:00, зал № 602",
+   "IsDeleted": false,
+   "Date": "/Date(1784624400000)/",
+   "Type": 0,
+   "IsAct": true,
+   "HearingDate": null,
+   "ContentTypes": [
+    "Об отложении рассмотрения заявления/жалобы"
+   ],
+   "DocumentTypeName": "Определение",
+   "HearingPlace": null,
+   "CourtName": "АС Свердловской области",
+   "InstanceLevel": 1
+  },
+  {
+   "CaseId": "11111111-2222-4333-8444-555555555555",
+   "InstanceId": "inst-1",
+   "Id": "",
+   "InstStage": 12,
+   "DocStage": 0,
+   "PublishDate": null,
+   "DisplayDate": "21.07.2026",
+   "PublishDisplayDate": "",
+   "AppealDate": null,
+   "ReasonDocumentId": null,
+   "Content": null,
+   "Judges": [],
+   "Declarers": [],
+   "FileName": "",
+   "AdditionalInfo": "",
+   "IsDeleted": false,
+   "Date": "/Date(1784624400000)/",
+   "Type": 0,
+   "IsAct": false,
+   "HearingDate": null,
+   "ContentTypes": [
+    "Об отложении судебного разбирательства"
+   ],
+   "DocumentTypeName": "Информация о принятом судебном акте",
+   "HearingPlace": null,
+   "CourtName": "АС Свердловской области",
+   "InstanceLevel": 1
+  },
+  {
+   "CaseId": "11111111-2222-4333-8444-555555555555",
+   "InstanceId": "inst-1",
+   "Id": "cccccccc-0000-4000-8000-000000000016",
+   "InstStage": 12,
+   "DocStage": 0,
+   "PublishDate": null,
+   "DisplayDate": "05.08.2026",
+   "PublishDisplayDate": "",
+   "AppealDate": null,
+   "ReasonDocumentId": "aaaaaaaa-0000-4000-8000-000000000001",
+   "Content": null,
+   "Judges": [],
+   "Declarers": [
+    {
+     "Id": "00000000-0000-0000-0000-000000000000",
+     "Organization": "Сидоров Петр Петрович",
+     "Type": 3
+    }
+   ],
+   "FileName": "",
+   "AdditionalInfo": "В ответ на Заявление (23.06.2026) от ПАО \"СБЕРБАНК РОССИИ\"",
+   "IsDeleted": false,
+   "Date": "/Date(1785920400000)/",
+   "Type": 0,
+   "IsAct": false,
+   "HearingDate": null,
+   "ContentTypes": [
+    "Отзыв на исковое заявление (заявление)"
+   ],
+   "DocumentTypeName": "Отзыв",
+   "HearingPlace": null,
+   "CourtName": "АС Свердловской области",
+   "InstanceLevel": 1
+  },
+  {
+   "CaseId": "11111111-2222-4333-8444-555555555555",
+   "InstanceId": "inst-1",
+   "Id": "cccccccc-0000-4000-8000-000000000017",
+   "InstStage": 12,
+   "DocStage": 0,
+   "PublishDate": null,
+   "DisplayDate": "15.09.2026",
+   "PublishDisplayDate": "",
+   "AppealDate": null,
+   "ReasonDocumentId": "aaaaaaaa-0000-4000-8000-000000000001",
+   "Content": null,
+   "Judges": [
+    {
+     "Id": "j",
+     "Name": "Петрова А. В.",
+     "Role": "Судья-докладчик",
+     "Group": "11 судебный состав"
+    }
+   ],
+   "Declarers": [],
+   "FileName": "A60-1-2026_20260915_Prochie_sudebnye_dokumenty.pdf",
+   "AdditionalInfo": "Штрихкод: 0031000004 В ответ на Заявление (23.06.2026) от ПАО \"СБЕРБАНК РОССИИ\"",
+   "IsDeleted": false,
+   "Date": "/Date(1789462800000)/",
+   "Type": 0,
+   "IsAct": true,
+   "HearingDate": null,
+   "ContentTypes": [
+    "Резолютивная часть определения суда"
+   ],
+   "DocumentTypeName": "Прочие судебные документы",
+   "HearingPlace": null,
+   "CourtName": "АС Свердловской области",
+   "InstanceLevel": 1
+  },
+  {
+   "CaseId": "11111111-2222-4333-8444-555555555555",
+   "InstanceId": "inst-1",
+   "Id": "cccccccc-0000-4000-8000-000000000018",
+   "InstStage": 12,
+   "DocStage": 0,
+   "PublishDate": null,
+   "DisplayDate": "17.09.2026",
+   "PublishDisplayDate": "18.09.2026 г. 10:13:25 МСК",
+   "AppealDate": "/Date(1792357200000)/",
+   "ReasonDocumentId": "aaaaaaaa-0000-4000-8000-000000000001",
+   "Content": null,
+   "Judges": [
+    {
+     "Id": "j",
+     "Name": "Петрова А. В.",
+     "Role": "Судья-докладчик",
+     "Group": "11 судебный состав"
+    }
+   ],
+   "Declarers": [],
+   "FileName": "A60-1-2026_20260917_Opredelenie.pdf",
+   "AdditionalInfo": "Штрихкод: 0031000005 В ответ на Заявление (23.06.2026) от ПАО \"СБЕРБАНК РОССИИ\"",
+   "IsDeleted": false,
+   "Date": "/Date(1789635600000)/",
+   "Type": 0,
+   "IsAct": true,
+   "HearingDate": null,
+   "ContentTypes": [
+    "О признании сделки должника недействительной и (или) применении последствий недействительности ничтожной сделки"
+   ],
+   "DocumentTypeName": "Определение",
+   "HearingPlace": null,
+   "CourtName": "АС Свердловской области",
+   "InstanceLevel": 1
+  }
+ ]
+}

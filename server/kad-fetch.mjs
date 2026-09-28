@@ -199,8 +199,13 @@ export class KadFetcher {
   }
 
   /**
-   * PDF судебного акта → Buffer. Сначала запросом от имени браузера (cookies
-   * общие), а если картотека ответила не PDF — из самой страницы картотеки.
+   * PDF судебного акта → Buffer.
+   *
+   * На прямой запрос картотека отвечает не файлом, а страницей-проверкой:
+   * скрипт решает задачку, отправляет форму и перенаправляет на
+   * /Document/Pdf/…?isAddStamp=True. Поэтому PDF открывается во вкладке, как
+   * у человека, и берётся из ответа браузеру. Прямой запрос остаётся первым
+   * шагом: когда cookies после проверки уже есть, он быстрее.
    */
   pdf(url) {
     return this.queue(async () => {
@@ -208,24 +213,21 @@ export class KadFetcher {
       const target = this.base === 'https://kad.arbitr.ru' ? url : url.replace(/^https?:\/\/kad\.arbitr\.ru/i, this.base);
       const res = await ctx.request.get(target, { timeout: 60000, headers: { Referer: `${this.base}/` } }).catch(() => null);
       if (res && res.ok()) {
-        const buf = await res.body();
+        const buf = await res.body().catch(() => null);
         if (isPdf(buf)) return buf;
       }
       const page = await ctx.newPage();
       try {
-        await page.goto(`${this.base}/`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-        await this.passChallenge(page).catch(() => {});
-        const b64 = await page.evaluate(async (u) => {
-          const r = await fetch(u, { credentials: 'include' });
-          if (!r.ok) return 'ERR' + r.status;
-          const bytes = new Uint8Array(await r.arrayBuffer());
-          let s = '';
-          for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
-          return btoa(s);
-        }, target);
-        if (b64.startsWith('ERR')) throw new Error(`kad.arbitr ответил ${b64.slice(3)}`);
-        const buf = Buffer.from(b64, 'base64');
-        if (!isPdf(buf)) throw new Error('вместо PDF пришла страница — документ ещё не опубликован или требуется проверка');
+        const got = new Promise((resolve) => {
+          page.on('response', async (r) => {
+            if (!/pdf/i.test(r.headers()['content-type'] || '') || !/^https?:/i.test(r.url())) return;
+            const buf = await r.body().catch(() => null);
+            if (isPdf(buf)) resolve(buf);
+          });
+        });
+        await page.goto(target, { waitUntil: 'commit', timeout: 60000 }).catch(() => {});
+        const buf = await Promise.race([got, new Promise((r) => setTimeout(() => r(null), 45000))]);
+        if (!buf) throw new Error('картотека не отдала PDF за 45 секунд — документ ещё не опубликован или проверка не пройдена');
         return buf;
       } finally {
         await page.close().catch(() => {});

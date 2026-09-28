@@ -125,6 +125,8 @@
       let score = 0;
       const gap = filed ? D.diff(filed, r.date) : 99;
       const agap = Math.abs(gap);
+      // Дальше двух недель от даты подачи — другое заявление, даже того же лица.
+      if (filed && agap > 14) return null;
       if (agap === 0) score += 100;
       else if (agap <= 3) score += 70 - agap * 5;
       else if (agap <= 14) score += 20 - agap;
@@ -218,7 +220,10 @@
       if (refRoot.docId && rootHit.r.docId !== refRoot.docId) {
         const byId = records.find((r) => r.docId === refRoot.docId);
         rootHit = byId ? { r: byId, cls: R.classify(byId), score: 500 } : null;
-      } else if (!refRoot.docId && rootHit.cls.kind !== 'application') {
+      } else if (!refRoot.docId && (rootHit.cls.kind !== 'application' || rootHit.r.date !== s.filedDate ||
+          partyKey(rootHit.r.from || rootHit.r.applicant || '') !== partyKey(refRoot.from))) {
+        // Ссылаются на заявление от даты подачи, а найдено заявление другого
+        // дня или другого лица — это не оно.
         rootHit = null;
       }
     }
