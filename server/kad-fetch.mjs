@@ -417,6 +417,7 @@ export function itemsToText(items, caseId, base = 'https://kad.arbitr.ru') {
     return da < db ? -1 : da > db ? 1 : 0;
   });
   for (const it of sorted) {
+    if (it.IsDeleted) continue;
     const date = ruDate(pick(it, /^(?:DisplayDate|Date|RegDate|DocumentDate|RegistrationDate)$/i) || pick(it, /date/i));
     if (!date) continue;
     const type = pick(it, /^(?:DocumentTypeName|DocumentType|TypeName|DocType)$/i) || 'Документ';
@@ -431,32 +432,53 @@ export function itemsToText(items, caseId, base = 'https://kad.arbitr.ru') {
     const id = String(it.Id || it.id || '');
     if (GUID_RE.test(id)) lines.push(`Документ: ${id.match(GUID_RE)[0]}`);
 
-    // «В ответ на»: текстом, если он есть, и ссылкой на документ, если
-    // картотека её даёт, — ссылка точнее любого сравнения по дате.
-    const reasonText = deepFind(it, /^\s*в\s+ответ\s+на/i) || pick(it, /(?:Reason|Answer|Response|Basis)(?:Text|Name|Description)?$/i);
+    // Картотека пишет связь и заседание в AdditionalInfo одной строкой:
+    // «Штрихкод: 0031739831 В ответ на Заявление (23.06.2026) от ПАО …,
+    // Дата и время судебного заседания 15.09.2026, 10:00, зал № 602».
+    let info = String(pick(it, /^AdditionalInfo$/i) || '').replace(/штрихкод:?\s*\d+/i, '').trim();
+    let hearingText = '';
+    const hm = info.match(/,?\s*дата\s+и\s+время\s+(?:судебного\s+)?заседания[:\s]*(.+)$/i);
+    if (hm) { hearingText = hm[1].trim(); info = info.slice(0, hm.index).trim(); }
+    let reasonText = '';
+    const rm = info.match(/в\s+ответ\s+на[:\s]*(.+)$/i);
+    if (rm) { reasonText = rm[1].replace(/[,;]\s*$/, '').trim(); info = info.slice(0, rm.index).trim(); }
+    if (!reasonText) {
+      const deep = deepFind(it, /в\s+ответ\s+на/i);
+      if (deep) reasonText = deep.replace(/^[\s\S]*?в\s+ответ\s+на[:\s]*/i, '').trim();
+    }
+
+    // Ссылка на документ точнее любого сравнения по дате, а текст нужен
+    // человеку и тем записям, у которых ссылки нет.
     const reasonId = pick(it, /(?:Reason|Parent|Answer|Response|Basis)(?:Document)?Id$/i);
-    if (typeof reasonText === 'string' && reasonText.trim()) {
-      lines.push(/^\s*в\s+ответ\s+на/i.test(reasonText) ? reasonText.trim() : `В ответ на: ${reasonText.trim()}`);
+    if (reasonText) {
+      lines.push(`В ответ на: ${reasonText}`);
     } else if (reasonId && byId.has(String(reasonId))) {
       const ref = byId.get(String(reasonId));
       const rType = pick(ref, /^(?:DocumentTypeName|DocumentType|TypeName)$/i) || 'Документ';
       const rFrom = names(pick(ref, /^(?:Declarers|Declarer|Applicants)$/i)).join(', ');
-      lines.push(`В ответ на: ${rType} от (${ruDate(pick(ref, /^(?:DisplayDate|Date)$/i))})${rFrom ? ` от ${rFrom}` : ''}`);
+      lines.push(`В ответ на: ${rType} (${ruDate(pick(ref, /^(?:DisplayDate|Date)$/i))})${rFrom ? ` от ${rFrom}` : ''}`);
     }
     if (reasonId && GUID_RE.test(String(reasonId))) lines.push(`Ответ на документ: ${String(reasonId).match(GUID_RE)[0]}`);
 
     const hearing = pick(it, /^(?:HearingDate|HearingDateTime|SessionDate)$/i);
-    if (hearing) {
+    if (hearingText) {
+      lines.push(`Дата и время судебного заседания: ${hearingText}`);
+    } else if (hearing) {
       const place = pick(it, /^(?:HearingPlace|SessionPlace|Place)$/i);
       const t = String(hearing).match(/\/Date\((-?\d+)/)
         ? (() => { const d = new Date(+String(hearing).match(/\/Date\((-?\d+)/)[1] + 3 * 3600 * 1000); return `${ruDate(hearing)}, ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`; })()
         : String(hearing);
       lines.push(`Дата и время судебного заседания: ${t}${place ? `, ${place}` : ''}`);
     }
-    const info = pick(it, /^(?:AdditionalInfo|Comment|Description|Note)$/i);
-    if (typeof info === 'string' && info.trim() && !/^\s*в\s+ответ\s+на/i.test(info)) lines.push(info.trim().replace(/\s+/g, ' '));
+    const comment = pick(it, /^(?:Comment|Description|Note)$/i);
+    for (const extra of [info, typeof comment === 'string' ? comment : '']) {
+      if (extra && extra.trim()) lines.push(extra.trim().replace(/\s+/g, ' '));
+    }
     const pub = pick(it, /^(?:PublishDisplayDate|PublishDate|PublicationDate)$/i);
-    if (pub) lines.push(`Публикация: ${ruDate(pub) || pub}`);
+    if (pub) lines.push(`Публикация: ${/\/Date\(/.test(pub) ? ruDate(pub) : pub}`);
+    // Срок обжалования, который считает сама картотека.
+    const appeal = pick(it, /^AppealDate$/i);
+    if (appeal) lines.push(`Обжалование до: ${ruDate(appeal)}`);
 
     const file = pick(it, /^(?:FileName|File)$/i);
     const docCase = String(it.CaseId || caseId || '');

@@ -27,6 +27,7 @@
     refused: { label: 'Отказано в принятии', tone: 'bad', note: 'Спор не начат' },
     pending: { label: 'Рассматривается', tone: 'ok', note: 'Заседание идёт, движение продолжается' },
     suspended: { label: 'Производство приостановлено', tone: 'warn', note: 'Возобновится по устранении причины' },
+    decided: { label: 'Вынесено определение по существу', tone: 'neutral', note: 'Удовлетворено заявление или нет — видно из текста определения' },
     granted: { label: 'Сделка признана недействительной', tone: 'ok', note: 'Требуются действия по исполнению' },
     partly: { label: 'Заявление удовлетворено частично', tone: 'ok', note: 'Требуются действия по исполнению' },
     denied: { label: 'В удовлетворении отказано', tone: 'bad', note: 'Нужно решить вопрос об обжаловании' },
@@ -95,6 +96,8 @@
     { nature: 'ruling', re: /^определени/ },
     { nature: 'decision', re: /^решени/ },
     { nature: 'protocol', re: /^протокол/ },
+    // «Прочие судебные документы» картотеки: резолютивная часть, протокол, аудиозапись.
+    { nature: 'courtDoc', re: /^прочие\s+судебные\s+документ/ },
     { nature: 'application', re: /^заявлени/ },
     { nature: 'motion', re: /^ходатайств/ },
     { nature: 'response', re: /^(?:отзыв|возражени|мнени)/ },
@@ -135,8 +138,18 @@
     { kind: 'hearing', re: /назначени[а-яё]*\s+(?:дела\s+|заявлени[а-яё]*\s+)?(?:к\s+)?(?:судебно[а-яё]*\s+)?(?:заседани|разбирательств)|назначить\s+(?:дело\s+|заявление\s+)?(?:к\s+)?(?:судебно[а-яё]*\s+)?(?:заседани|разбирательств)/, doc: 'Определение о назначении заседания', stage: 'accepted' },
     { kind: 'partly', re: /частичн[а-яё]*[\s\S]{0,60}?удовлетвор|удовлетвор[а-яё]*[\s\S]{0,60}?частичн|удовлетвор[а-яё]*[\s\S]{0,300}?в\s+остальной\s+части/, doc: 'Определение о частичном удовлетворении', stage: 'partly' },
     { kind: 'denied', re: /отказ[а-яё]*\s+в\s+удовлетворении|в\s+удовлетворении\s+(?:заявлени|требовани)[\s\S]{0,300}?отказать/, doc: 'Определение об отказе в удовлетворении', stage: 'denied' },
+    // «О признании сделки должника недействительной и (или) применении
+    // последствий…» — так картотека называет категорию спора, и этим же
+    // названием подписывает итоговое определение независимо от исхода.
+    // Удовлетворено или отказано — видно только из резолютивной части.
+    { kind: 'merits', re: /и\s*\(\s*или\s*\)\s*применени/, doc: 'Определение по существу спора', stage: 'decided' },
+    // Резолютивную часть объявляют в заседании, где спор разрешён по существу.
+    { kind: 'merits', re: /резолютивн[а-яё]*\s+част/, doc: 'Резолютивная часть определения', stage: 'decided' },
     { kind: 'granted', re: /удовлетворени[а-яё]*\s+(?:заявлени|требовани)|удовлетворить|признани[а-яё]*\s+(?:сделк|договор|платеж|перечислени|действи)[а-яё]*[\s\S]{0,120}?недействительн|признать\s+[\s\S]{0,160}?недействительн|применени[а-яё]*\s+последствий|применить\s+последстви/, doc: 'Определение о признании сделки недействительной', stage: 'granted' }
   ];
+
+  /* Итог спора в первой инстанции. */
+  const FINAL = new Set(['partly', 'denied', 'granted', 'terminated', 'unconsidered']);
 
   /* Процессуальные определения апелляции и кассации: движение жалобы, а не спора. */
   const APPELLATE_PROC = new Set(['accepted', 'hearing', 'postponed', 'noMovement', 'recess', 'suspended',
@@ -167,6 +180,7 @@
     ruling: { kind: 'ruling', doc: 'Определение', stage: null },
     decision: { kind: 'ruling', doc: 'Решение', stage: null },
     protocol: { kind: 'protocol', doc: 'Протокол заседания', stage: null },
+    courtDoc: { kind: 'courtDoc', doc: 'Судебный документ', stage: null },
     application: { kind: 'otherApplication', doc: 'Заявление', stage: null },
     motion: { kind: 'motion', doc: 'Ходатайство', stage: null },
     response: { kind: 'response', doc: 'Отзыв (возражения)', stage: null },
@@ -200,10 +214,12 @@
    */
   function classify(record, resolution) {
     const base = classifyTitle(record);
-    if (!resolution || !['ruling', 'decision', 'protocol', 'unknown'].includes(base.nature)) return base;
-    if (base.kind && !['ruling', 'protocol'].includes(base.kind)) return base;
+    if (!resolution || !['ruling', 'decision', 'protocol', 'courtDoc', 'unknown'].includes(base.nature)) return base;
+    if (base.kind && !['ruling', 'protocol', 'courtDoc', 'merits'].includes(base.kind)) return base;
     const low = N(resolution);
-    const hint = RULING_KINDS.find((k) => k.re.test(low));
+    // Для определения по существу из текста берётся только исход.
+    const pool = base.kind === 'merits' ? RULING_KINDS.filter((k) => FINAL.has(k.kind)) : RULING_KINDS;
+    const hint = pool.find((k) => k.re.test(low));
     if (!hint) return base;
     return appellate(record, N(globalThis.KadCard.title(record)),
       { kind: hint.kind, nature: base.nature, doc: hint.doc, stage: hint.stage, matched: hint.re.source, fromText: true });
@@ -374,6 +390,10 @@
     cassationResult: [
       { role: 'any', what: 'Исполнить акт с учётом результата кассации; при направлении на новое рассмотрение — готовить позицию заново к назначенному заседанию.',
         norm: 'ст. 287, 289 АПК РФ' }
+    ],
+    merits: [
+      { role: 'any', what: 'Вынесено определение по существу спора. Удовлетворено заявление или нет, картотека в названии не пишет — это видно из резолютивной части: загрузите текст определения. От исхода зависит, исполнять определение или решать вопрос об обжаловании — срок десять дней со дня вынесения.',
+        due: APPEAL_10, norm: 'ч. 3 ст. 223 АПК РФ' }
     ],
     appealProc: [
       { role: 'any', what: 'Представить отзыв на апелляционную жалобу с документами, подтверждающими возражения, так, чтобы он поступил в суд и к лицам, участвующим в деле, до заседания; обеспечить явку в апелляционный суд или заявить о рассмотрении в отсутствие.',

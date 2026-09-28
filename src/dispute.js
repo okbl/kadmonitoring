@@ -119,6 +119,9 @@
 
     return records.map((r) => {
       const cls = R.classify(r);
+      // Судебный акт или ответ стороны заявлением спора быть не может, даже
+      // если датирован днём подачи: «Перерыв в заседании» от 23.06 — не корень.
+      if (/^(?:ruling|decision|appealRuling|protocol|response|motion|complaint)$/.test(cls.nature || '')) return null;
       let score = 0;
       const gap = filed ? D.diff(filed, r.date) : 99;
       const agap = Math.abs(gap);
@@ -133,7 +136,7 @@
       if (/недействительн|оспаривани|сделк/.test(norm(globalThis.KadCard.title(r) + ' ' + r.extra.join(' ')))) score += 25;
       if (wanted && partyKey(r.from || r.applicant || '') === wanted) score += 25;
       return { r, cls, score, gap };
-    }).filter((x) => x.score > 0)
+    }).filter((x) => x && x.score > 0)
       .sort((a, b) => b.score - a.score);
   }
 
@@ -144,6 +147,36 @@
     }
     const c = rootCandidates(records, spec);
     return c.length ? c[0] : null;
+  }
+
+  /**
+   * Заявитель по ссылкам «В ответ на Заявление (дата подачи) от …». Если
+   * на эту дату ссылаются заявления разных лиц, выбирается указанное
+   * пользователем, иначе — то, на которое ссылаются чаще.
+   */
+  function inferRoot(records, spec) {
+    const D = globalThis.KadDates;
+    const groups = new Map();
+    for (const r of records) {
+      const ref = String(r.responseTo || '');
+      if (typeOf(ref) !== typeOf('Заявление') || D.find(ref) !== spec.filedDate) continue;
+      const m = ref.match(/\d{4}\)?\s*от\s+(.+)$/i);
+      if (!m) continue;
+      const from = m[1].replace(/[,;]\s*$/, '').trim();
+      const key = partyKey(from);
+      if (!key) continue;
+      const g = groups.get(key) || { from, n: 0, ids: new Map() };
+      g.n++;
+      if (r.responseToId) g.ids.set(r.responseToId, (g.ids.get(r.responseToId) || 0) + 1);
+      groups.set(key, g);
+    }
+    if (!groups.size) return null;
+    const wanted = partyKey(spec.applicant || '');
+    const g = wanted && groups.has(wanted) ? groups.get(wanted) : [...groups.values()].sort((a, b) => b.n - a.n)[0];
+    // Картотека даёт и идентификатор документа, на который отвечают, — им
+    // корень и опознаётся, даже если самого заявления в хронологии нет.
+    const docId = [...g.ids.entries()].sort((a, b) => b[1] - a[1]).map((x) => x[0])[0] || null;
+    return { from: g.from, n: g.n, docId, rivals: groups.size - 1 };
   }
 
   /** Признаки предмета спора — по корневому заявлению. */
@@ -177,19 +210,36 @@
     const byDate = new Map();
     for (const r of records) byDate.set(r.date, (byDate.get(r.date) || 0) + 1);
 
-    const rootHit = findRoot(records, s);
+    let rootHit = findRoot(records, s);
+    // Ссылки «В ответ на Заявление (дата подачи) от …» точнее догадки по дате:
+    // если они указывают на другой документ, корень — тот, на который ссылаются.
+    const refRoot = s.filedDate ? inferRoot(records, s) : null;
+    if (rootHit && !rootHit.manual && refRoot) {
+      if (refRoot.docId && rootHit.r.docId !== refRoot.docId) {
+        const byId = records.find((r) => r.docId === refRoot.docId);
+        rootHit = byId ? { r: byId, cls: R.classify(byId), score: 500 } : null;
+      } else if (!refRoot.docId && rootHit.cls.kind !== 'application') {
+        rootHit = null;
+      }
+    }
     const root = rootHit ? rootHit.r : null;
 
-    // Заявления в карточке может ещё не быть (публикация отстаёт), но дату
-    // подачи пользователь знает. Тогда корень — синтетический.
+    // Заявления в карточке может не быть: публикация отстаёт, а в хронологии
+    // картотеки входящие документы бывают не все. Но дату подачи пользователь
+    // знает, а другие документы на заявление ссылаются: «В ответ на
+    // Заявление (23.06.2026) от ПАО "СБЕРБАНК РОССИИ"». По этим ссылкам
+    // восстанавливается и заявитель.
+    const inferred = !root ? refRoot : null;
     const syntheticRoot = !root && s.filedDate ? {
       date: s.filedDate,
       title: 'Заявление',
-      content: s.subject || 'об оспаривании сделки должника',
-      from: s.applicant || '',
+      content: s.subject || (inferred ? '' : 'об оспаривании сделки должника'),
+      from: s.applicant || (inferred && inferred.from) || '',
       synthetic: true,
+      inferred: !!inferred,
+      docId: (inferred && inferred.docId) || undefined,
       extra: [],
-      id: 'synthetic-root',
+      id: (inferred && inferred.docId) || 'synthetic-root',
       instance: 'Первая инстанция'
     } : null;
 
@@ -333,7 +383,7 @@
      *   спор рассматривается                                → от принятия,
      *   иначе                                               → от последней стадии.
      */
-    const TERMINAL = new Set(['granted', 'partly', 'denied', 'terminated', 'unconsidered', 'returned', 'refused',
+    const TERMINAL = new Set(['decided', 'granted', 'partly', 'denied', 'terminated', 'unconsidered', 'returned', 'refused',
       'appeal', 'appealDone', 'cassation', 'cassationDone']);
     let anchor = 0;
     let lastStage = 0;
@@ -385,6 +435,14 @@
           else dueNote = 'дата заседания неизвестна — укажите её или загрузите текст определения';
         } else if (req.due) {
           due = R.deadline(req.due, e.rec.date);
+          // Картотека сама считает срок обжалования акта. Если её срок позже
+          // десяти дней по ч. 3 ст. 223 АПК, показываем оба: ранний — как срок.
+          if (req.due === R.APPEAL_10 && e.rec.appealUntil && due && e.rec.appealUntil !== due.date) {
+            dueNote = `Картотека указывает срок обжалования до ${D.fmt(e.rec.appealUntil)}. ` +
+              (e.rec.appealUntil > due.date
+                ? `Здесь показан более ранний срок — десять рабочих дней по ч. 3 ст. 223 АПК РФ; какой срок применим к этому определению, проверьте по его тексту («может быть обжаловано в течение…»).`
+                : 'Проверьте срок по тексту определения.');
+          }
         }
 
         out.push({ what: req.what, norm: req.norm, due, dueNote, from: src, done: doneBy(req, e, events, ctx.role) });
@@ -428,7 +486,7 @@
    */
   function doneBy(req, e, events, role) {
     if (!req.doneBy) return null;
-    const mine = (x) => /управляющ/i.test(x.rec.from || '') || (role === 'applicant' && x.confidence !== 'root' && !/^(?:ruling|decision|appealRuling)$/.test(x.cls.nature || ''));
+    const mine = (x) => /управляющ/i.test(x.rec.from || '') || (role === 'applicant' && x.confidence !== 'root' && !/^(?:ruling|decision|appealRuling|protocol|courtDoc)$/.test(x.cls.nature || ''));
     const hit = events.find((x) => x.rec.date >= e.rec.date && x !== e && req.doneBy.includes(x.cls.kind) && mine(x));
     return hit ? { date: hit.rec.date, doc: globalThis.KadCard.title(hit.rec) } : null;
   }

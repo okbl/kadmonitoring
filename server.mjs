@@ -126,7 +126,7 @@ function summaryOf(id, st) {
 /* Когда карточка в последний раз приходила с kad.arbitr — по кнопке или по плану. */
 const lastCheck = (st) => st.checkedAt || (st.card && st.card.source === 'kad.arbitr' && st.card.at) || null;
 
-const isAct = (e) => !e.rec.synthetic && /^(?:ruling|decision|appealRuling|protocol)$/.test(e.cls.nature || '');
+const isAct = (e) => !e.rec.synthetic && /^(?:ruling|decision|appealRuling|protocol|courtDoc)$/.test(e.cls.nature || '');
 
 /* ---------- обращение к картотеке ---------- */
 

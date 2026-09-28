@@ -50,7 +50,7 @@ try {
   await page.waitForTimeout(3000);
   const body = await page.evaluate(() => document.body ? document.body.innerText : '').catch(() => '');
   console.log(`текст страницы: ${body.length} симв.`);
-  console.log(body.slice(0, 2500));
+  console.log(body.slice(0, 600));
 
   section('запросы страницы к arbitr.ru');
   for (const c of calls) console.log(c.status, c.type, c.url);
@@ -84,17 +84,9 @@ try {
   const raw = r.apiRaw || [];
   if (raw.length) {
     console.log(`поля записи: ${Object.keys(raw[0]).join(', ')}`);
-    for (const it of raw.slice(0, 3)) console.log('  образец:', JSON.stringify(it).slice(0, 2500));
-    console.log('все записи (дата | тип | содержание | подал | в ответ на):');
-    const s = (v) => typeof v === 'string' ? v : JSON.stringify(v);
-    for (const it of raw) {
-      const reason = Object.entries(it).filter(([k]) => /reason|answer|response|parent/i.test(k)).map(([k, v]) => `${k}=${s(v)}`).join(' ');
-      console.log('  ', [it.DisplayDate || it.Date, it.DocumentTypeName, s(it.ContentTypes || it.Content || ''), s(it.Declarers || ''), reason]
-        .map((x) => String(x == null ? '' : x).replace(/\s+/g, ' ').slice(0, 160)).join(' | '));
-    }
+    for (const it of raw.slice(0, 1)) console.log('  образец:', JSON.stringify(it).slice(0, 1200));
   }
-  console.log('\nтекст страницы целиком (первые 7000 симв.):');
-  console.log(r.pageText.slice(0, 7000));
+
   for (const [name, text] of [['страница', r.pageText], ['API', r.apiText]]) {
     if (!text) continue;
     const card = C.parse(text);
@@ -111,7 +103,7 @@ try {
   }
   if (!r.pageText && !r.apiItems) failed = true;
 
-  /* 3. PDF последнего судебного акта спора — проверка загрузки и разбора текста. */
+  /* 3. PDF последнего судебного акта спора: какие адреса отдают файл. */
   const R = globalThis.KadRules;
   const texts = [r.apiText, r.pageText].filter(Boolean).map((t) => C.parse(t));
   const acts = texts.flatMap((c) => c.records).filter((x) => x.pdf && /23\.06\.2026/.test(x.responseTo || ''));
@@ -120,13 +112,61 @@ try {
   if (!act) console.log('актов со ссылкой на PDF в ответ на заявление от 23.06.2026 не найдено');
   else {
     console.log(D.fmt(act.date), C.title(act), act.pdf);
+    const m = act.pdf.match(/\/(?:Kad\/PdfDocument|Document\/Pdf)\/([^/]+)\/([^/]+)\/([^?#]+)/);
+    const variants = m ? [
+      `https://kad.arbitr.ru/Kad/PdfDocument/${m[1]}/${m[2]}/${m[3]}`,
+      `https://kad.arbitr.ru/Document/Pdf/${m[1]}/${m[2]}/${m[3]}?isAddStamp=True`,
+      `https://kad.arbitr.ru/Document/Pdf/${m[1]}/${m[2]}/${m[3]}`
+    ] : [act.pdf];
+    const ctx2 = await fetcher.context();
+    const pg = await ctx2.newPage();
+    await pg.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {});
+    await pg.waitForTimeout(4000);
+    for (const v of variants) {
+      console.log('\n--', v);
+      const res = await ctx2.request.get(v, { timeout: 60000, headers: { Referer: url } }).catch((e) => ({ err: e.message }));
+      if (res.err) { console.log('  request: ошибка', res.err); }
+      else {
+        const body = await res.body();
+        console.log(`  request: ${res.status()} ${res.headers()['content-type']} ${body.length} байт, начало: ${JSON.stringify(body.subarray(0, 8).toString('latin1'))}`);
+        if (!/%PDF/.test(body.subarray(0, 8).toString('latin1'))) {
+          const html = body.toString('utf8');
+          console.log('  HTML:', html.replace(/\s+/g, ' ').slice(0, 1500));
+          console.log('  src/href:', [...html.matchAll(/(?:src|href|data)=["']([^"']+)["']/g)].map((x) => x[1]).filter((x) => /pdf|document/i.test(x)).slice(0, 10).join(' , '));
+        }
+      }
+      const inPage = await pg.evaluate(async (u) => {
+        try {
+          const r = await fetch(u, { credentials: 'include' });
+          const b = new Uint8Array(await r.arrayBuffer());
+          return `${r.status} ${r.headers.get('content-type')} ${b.length} байт, начало: ${String.fromCharCode(...b.slice(0, 8))}`;
+        } catch (e) { return 'ошибка ' + e.message; }
+      }, v);
+      console.log('  из страницы:', inPage);
+    }
+    // Как это делает человек: открыть ссылку во вкладке.
+    const tab = await ctx2.newPage();
+    const pdfs = [];
+    tab.on('response', async (res) => {
+      const ct = res.headers()['content-type'] || '';
+      if (/pdf/i.test(ct)) pdfs.push(`${res.status()} ${res.url()}`);
+    });
+    await tab.goto(variants[0], { waitUntil: 'domcontentloaded', timeout: 60000 }).catch((e) => console.log('вкладка:', e.message));
+    await tab.waitForTimeout(8000);
+    console.log('\nвкладка:', tab.url(), '·', await tab.title().catch(() => ''));
+    console.log('  ответы с PDF:', pdfs.join(' , ') || 'нет');
+    console.log('  текст:', (await tab.evaluate(() => document.body ? document.body.innerText : '').catch(() => '')).slice(0, 600));
+    console.log('  embed/iframe:', await tab.evaluate(() => [...document.querySelectorAll('embed,iframe,object')].map((e) => e.src || e.data).join(' , ')).catch(() => ''));
+    await tab.close();
+    await pg.close();
+
     try {
       const { pdfText } = await import('../server/pdf-text.mjs');
       const text = await pdfText(await fetcher.pdf(act.pdf));
       const ru = R.parseRuling(text);
-      console.log(`текст: ${text.length} симв.; резолютивная часть найдена: ${ru.hasResolution}; по ней: ${ru.kindHint}`);
+      console.log(`\nfetcher.pdf: текст ${text.length} симв.; резолютивная часть: ${ru.hasResolution}; по ней: ${ru.kindHint}`);
       console.log(ru.resolution.slice(0, 1800));
-    } catch (e) { console.log('PDF не загружен:', e.message); }
+    } catch (e) { console.log('\nfetcher.pdf: не загружен:', e.message); }
   }
 } catch (e) {
   failed = true;

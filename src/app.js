@@ -433,7 +433,7 @@
     manual: ['likely', 'включено вручную']
   };
 
-  const isAct = (e) => !e.rec.synthetic && /^(?:ruling|decision|appealRuling|protocol)$/.test(e.cls.nature || '');
+  const isAct = (e) => !e.rec.synthetic && /^(?:ruling|decision|appealRuling|protocol|courtDoc)$/.test(e.cls.nature || '');
 
   function renderTimeline(d) {
     const fresh = d.events.filter((e) => e.isNew).length;

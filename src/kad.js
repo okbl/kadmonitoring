@@ -24,7 +24,10 @@
     /^сервис/i, /^версия для печати/i, /^свернуть/i, /^развернуть/i, /^показать (ещё|все)/i,
     /^\d+\s*(документ|документов|документа)$/i, /^страница \d+/i, /^всего найдено/i,
     /^фильтр/i, /^сбросить/i, /^применить/i, /^закрыть$/i, /^назад$/i, /^вперёд$/i,
-    /^cookie/i, /^мы используем/i, /^капча/i, /^javascript/i
+    /^cookie/i, /^мы используем/i, /^капча/i, /^javascript/i,
+    // Служебные строки настоящей карточки: штрихкод документа и подсказки.
+    /^штрихкод\s*\d*$/i, /^нажмите, чтобы/i, /^отслеживать дело$/i, /^отправить на печать$/i,
+    /^подать документы в суд$/i, /^ввести код$/i, /^отчет по датам публикаций$/i, /^перейти к банкротному виду$/i
   ];
 
   const GUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
@@ -42,6 +45,7 @@
     { key: 'judge', re: /^(?:судья|председательствующий)[:\s]+(.*)$/i },
     { key: 'instance', re: /^(?:инстанция|суд)[:\s]+(.*)$/i },
     { key: 'published', re: /^(?:дата\s+публикации|публикация|опубликован[оа]?)[:\s]+(.*)$/i },
+    { key: 'appealUntil', re: /^обжалование\s+до[:\s]+(.*)$/i },
     { key: 'from', re: /^(?:подал|заявитель\s+документа)[:\s]+(.*)$/i }
   ];
 
@@ -109,7 +113,7 @@
     if (typeof DOMParser === 'undefined') {
       return html
         .replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ')
-        .replace(/<a\b[^>]*href="([^"]*\/Document\/Pdf\/[^"]*)"[^>]*>([\s\S]*?)<\/a>/gi,
+        .replace(/<a\b[^>]*href="([^"]*\/(?:Document\/Pdf|Kad\/PdfDocument)\/[^"]*)"[^>]*>([\s\S]*?)<\/a>/gi,
           (_, href, inner) => `${inner}\nPDF: ${absolute(href)}\n`)
         .replace(/<br\s*\/?>|<\/(p|div|li|tr|td|th|h\d|section|article|dt|dd)>/gi, '\n')
         .replace(/<[^>]+>/g, ' ')
@@ -119,7 +123,7 @@
     }
     const doc = new DOMParser().parseFromString(html, 'text/html');
     for (const el of doc.querySelectorAll('script,style,noscript,svg')) el.remove();
-    for (const a of doc.querySelectorAll('a[href*="/Document/Pdf/"]'))
+    for (const a of doc.querySelectorAll('a[href*="/Document/Pdf/"], a[href*="/PdfDocument/"]'))
       a.after(`\nPDF: ${absolute(a.getAttribute('href'))}\n`);
     for (const el of doc.querySelectorAll('br')) el.replaceWith('\n');
     for (const el of doc.querySelectorAll('p,div,li,tr,td,th,h1,h2,h3,h4,section,article,dt,dd'))
@@ -187,7 +191,9 @@
     const push = () => {
       if (!cur) return;
       // Запись без названия документа бесполезна и только шумит в таймлайне.
-      if (cur.title) out.push(cur);
+      // Заголовок инстанции («07.07.2026 · А60-3212/2025 АС Свердловской
+      // области») тоже начинается с даты, но это не документ.
+      if (cur.title && !(CASE_NO.test(' ' + cur.title) && cur.title.length < 90)) out.push(cur);
       cur = null;
     };
 
@@ -231,6 +237,7 @@
     for (const r of out) {
       for (const f of FIELDS) delete r[f.key + 'Pending'];
       r.title = r.title.replace(/\s*[·|]\s*$/, '').trim();
+      if (r.appealUntil) r.appealUntil = D.find(r.appealUntil);
       if (r.hearingInfo) {
         const hd = D.find(r.hearingInfo);
         if (hd) r.hearing = { date: hd, time: (r.hearingInfo.match(/\b(\d{1,2}[:.]\d{2})\b(?![.\d])/) || ['', ''])[1].replace('.', ':'), text: r.hearingInfo };
@@ -244,7 +251,7 @@
       const prev = seen.get(r.id);
       if (!prev) { seen.set(r.id, r); continue; }
       // Сливаем: у одной копии может быть «В ответ на», у другой — участники.
-      for (const k of ['responseTo', 'responseToId', 'applicant', 'respondent', 'thirdParty', 'judge', 'from', 'published', 'time', 'pdf', 'hearing', 'hearingInfo'])
+      for (const k of ['responseTo', 'responseToId', 'applicant', 'respondent', 'thirdParty', 'judge', 'from', 'published', 'time', 'pdf', 'hearing', 'hearingInfo', 'appealUntil'])
         if (!prev[k] && r[k]) prev[k] = r[k];
       prev.extra.push(...r.extra.filter((x) => !prev.extra.includes(x)));
     }
