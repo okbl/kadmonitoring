@@ -131,7 +131,7 @@
     $('urlOpen').hidden = !m;
     if (m) $('urlOpen').href = `https://kad.arbitr.ru/Card/${m[1]}`;
     $('btnFetch').disabled = !m;
-    if (!v) echo('urlEcho', backend ? 'Вставьте ссылку и нажмите «Загрузить с kad.arbitr»' : '');
+    if (!v) echo('urlEcho', backend ? 'Вставьте ссылку — карточка загрузится сама' : '');
     else if (!m) echo('urlEcho', 'Ожидается ссылка вида https://kad.arbitr.ru/Card/…', true);
     else echo('urlEcho', card && card.meta.caseNo ? `Дело ${card.meta.caseNo}` : 'Ссылка на карточку дела');
   }
@@ -286,6 +286,7 @@
     $('btnSave').disabled = false;
     $('btnPrint').disabled = false;
     scheduleSave();
+    autoTrack();
   }
 
   /* ---------- отрисовка ---------- */
@@ -310,7 +311,7 @@
 
   function reportParse(d) {
     if (!S.card.raw.trim()) {
-      echo('pasteEcho', backend ? 'Карточка ещё не загружена — нажмите «Загрузить с kad.arbitr»' : 'Карточка не вставлена — показано только то, что следует из даты подачи');
+      echo('pasteEcho', backend ? 'Карточка ещё не загружена — вставьте ссылку на неё' : 'Карточка не загружена — показано только то, что следует из даты подачи');
       return;
     }
     const g = card.diagnostics;
@@ -635,20 +636,46 @@
     }
   };
 
+  /*
+   * Идентификатор расширения — из открытого ключа в extension/manifest.json;
+   * build.mjs сверяет его с ключом. По нему страница на сайте находит
+   * установленное расширение.
+   */
+  const EXT_ID = 'hocagbfdoeocameodjbbceojgecjcijn';
+
+  /*
+   * Расширение: либо это его собственная страница, либо та же страница на
+   * сайте программы — тогда расширение отвечает ей (externally_connectable).
+   * В обоих случаях разговор идёт внутри браузера; споры хранит расширение.
+   */
   const Ext = {
     kind: 'ext',
     settings: null,
+    remote: false,
     async init() {
       const c = globalThis.chrome;
-      if (!(c && c.runtime && c.runtime.id && c.storage && c.storage.local)) return null;
+      if (!(c && c.runtime)) return null;
+      if (!(c.runtime.id && c.storage && c.storage.local)) {
+        if (!c.runtime.sendMessage) return null;
+        this.remote = true;
+        await this.send({ type: 'ping' });
+      }
       this.settings = await this.send({ type: 'settings' });
       return this;
     },
-    async send(msg) {
-      const r = await chrome.runtime.sendMessage(msg);
-      if (!r) throw new Error('расширение не ответило');
-      if (r.error) throw new Error(r.error);
-      return r;
+    send(msg) {
+      return new Promise((resolve, reject) => {
+        const done = (r) => {
+          const err = chrome.runtime.lastError;
+          if (err || !r) reject(new Error(err ? 'расширение недоступно' : 'расширение не ответило'));
+          else if (r.error) reject(new Error(r.error));
+          else resolve(r);
+        };
+        try {
+          if (this.remote) chrome.runtime.sendMessage(EXT_ID, msg, done);
+          else chrome.runtime.sendMessage(msg, done);
+        } catch (e) { reject(e); }
+      });
     },
     card(url) { return this.send({ type: 'card', url }); },
     async pdf(url) { return (await this.send({ type: 'pdf', url })).text; },
@@ -666,22 +693,50 @@
 
   let backend = null;
 
-  $('btnFetch').addEventListener('click', fetchCard);
+  $('btnFetch').addEventListener('click', () => {
+    if (backend) { fetchCard(); return; }
+    $('install').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    $('install').classList.add('flash');
+    setTimeout(() => $('install').classList.remove('flash'), 1600);
+    toast('Загружать карточки по ссылке умеет расширение для браузера — установите его, это один раз');
+  });
+
+  /*
+   * Вставили ссылку — карточка загружается сама, без кнопки. Дату можно
+   * ввести и потом: разбор пересчитается.
+   */
+  let loading = false;
+  let autoFor = '';
+  $('urlInput').addEventListener('input', () => {
+    const m = S.url.match(KAD_URL);
+    if (!backend || !m || loading || autoFor === m[1]) return;
+    autoFor = m[1];
+    fetchCard();
+  });
 
   async function fetchCard() {
     readUrl();
     if (!KAD_URL.test(S.url)) { toast('Нужна ссылка на карточку kad.arbitr.ru'); return; }
+    if (loading) return;
+    loading = true;
+    autoFor = S.url.match(KAD_URL)[1];
     const done = busy($('btnFetch'), 'Загружаю…');
-    echo('pasteEcho', 'Открываю карточку на kad.arbitr.ru — обычно это занимает 10–60 секунд…');
+    echo('pasteEcho', 'Загружаю карточку с kad.arbitr.ru — все страницы хронологии; обычно это 5–60 секунд…');
     try {
       const r = await backend.card(S.url);
       setCard(r.text, false, r.source || 'kad.arbitr', r.at);
       run();
       if (r.note) toast(r.note);
+      if (!S.filed) {
+        echo('dateEcho', 'Укажите дату подачи заявления — по ней программа найдёт спор в карточке', true);
+        dateInput.focus();
+      }
       await loadActs();
     } catch (err) {
-      echo('pasteEcho', `Карточку загрузить не удалось: ${err.message}. Можно вставить страницу вручную (Ctrl+A, Ctrl+C на странице карточки).`, true);
+      echo('pasteEcho', `Карточку загрузить не удалось: ${err.message}.`, true);
+      $('manual').open = true;
     } finally {
+      loading = false;
       done();
     }
   }
@@ -790,8 +845,19 @@
   });
 
   async function saveTracked() {
-    S.id = await backend.save(snapshot());
-    if (location.hash !== `#d=${S.id}`) history.replaceState(null, '', `#d=${S.id}`);
+    const mine = S;
+    mine.id = await backend.save(snapshot());
+    if (S === mine && location.hash !== `#d=${mine.id}`) history.replaceState(null, '', `#d=${mine.id}`);
+  }
+
+  /* Дата есть, карточка загружена по ссылке — спор сразу ставится на отслеживание. */
+  let tracking = null;
+  function autoTrack() {
+    if (!backend || S.id || tracking || !S.filed || S.card.source !== 'kad.arbitr') return;
+    tracking = saveTracked()
+      .then(() => toast('Спор поставлен на отслеживание — он в «Моих спорах»'))
+      .catch((err) => toast(`Не сохранено: ${err.message}`))
+      .finally(() => { tracking = null; });
   }
 
   /* Отслеживаемый спор сохраняется сам — после каждого изменения. */
@@ -830,7 +896,7 @@
   function renderList(items) {
     $('listNote').textContent = backend.note();
     if (!items.length) {
-      $('list').innerHTML = '<div class="note">Отслеживаемых споров пока нет. Нажмите «Новый спор», укажите дату подачи и ссылку на карточку, нажмите «Загрузить с kad.arbitr» и «Сохранить спор».</div>';
+      $('list').innerHTML = '<div class="note">Отслеживаемых споров пока нет. Нажмите «Новый спор», вставьте ссылку на карточку и укажите дату подачи заявления — карточка загрузится, а спор встанет на отслеживание сам.</div>';
       return;
     }
     $('list').innerHTML = items.map((it) => {
@@ -939,16 +1005,7 @@
   }
   $('setHours').addEventListener('change', (e) => saveSettings({ checkHours: +e.target.value }));
   $('setNotify').addEventListener('change', (e) => saveSettings({ notify: e.target.checked }));
-  $('setPdf').addEventListener('change', async (e) => {
-    // Тексты определений картотека отдаёт только браузеру, прошедшему её
-    // проверку; расширение читает их через отладчик вкладки — это отдельное
-    // разрешение, и браузер спросит его сам.
-    if (e.target.checked) {
-      const ok = await chrome.permissions.request({ permissions: ['debugger'] }).catch(() => false);
-      if (!ok) { e.target.checked = false; toast('Без разрешения тексты определений загружаться не будут'); return; }
-    }
-    saveSettings({ pdfTexts: e.target.checked });
-  });
+  $('setPdf').addEventListener('change', (e) => saveSettings({ pdfTexts: e.target.checked }));
 
   /* ---------- прочее ---------- */
 

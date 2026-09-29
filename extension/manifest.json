@@ -3,14 +3,39 @@
   "name": "Обособленный спор",
   "version": "0.0.0",
   "description": "Движение обособленного спора по карточке kad.arbitr: стадия, сроки, что требуется от финансового управляющего. Данные хранятся только в этом браузере.",
-  "icons": { "16": "icons/16.png", "32": "icons/32.png", "48": "icons/48.png", "128": "icons/128.png" },
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAmoBMrz+yT3xdK5nNJXjEYd7LlnfB2jm7Jq7KsUrA2T0poi6ghyhzACXqxDpoDRWz7fVmGxqNyDOWiSj8qPx7D0lQcClvdRefOTxuv5U0aiLsga0aI9HA0jaDqZ1Zd9MdMRjkUBPSS0vgls41VunPu0ZnfWMD5n/PMqGvRzvmpIXwSzQefUpUSk2wb868AsyZNHVG9r3I3phbPQIoik9aa1+PlUhRFtvUkgNChemyX+CBtoK3VHaI37ynN4SfsSwLNAxQZ4gHGJ54ySm6EzA/UV8ObIFj8rHBJIQy6YV29Z2vXeN1kXw5Hcs94m0jq4wv11qClZ3FlkyuLGqHYGiluwIDAQAB",
+  "icons": {
+    "16": "icons/16.png",
+    "32": "icons/32.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  },
   "action": {
     "default_title": "Обособленные споры",
-    "default_icon": { "16": "icons/16.png", "32": "icons/32.png" }
+    "default_icon": {
+      "16": "icons/16.png",
+      "32": "icons/32.png"
+    }
   },
-  "background": { "service_worker": "background.js", "type": "module" },
-  "permissions": ["storage", "unlimitedStorage", "alarms", "notifications", "scripting"],
-  "optional_permissions": ["debugger"],
-  "host_permissions": ["https://kad.arbitr.ru/*"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "permissions": [
+    "storage",
+    "unlimitedStorage",
+    "alarms",
+    "notifications",
+    "scripting",
+    "debugger"
+  ],
+  "host_permissions": [
+    "https://kad.arbitr.ru/*"
+  ],
+  "externally_connectable": {
+    "matches": [
+      "https://okbl.github.io/kadmonitoring/*"
+    ]
+  },
   "minimum_chrome_version": "116"
 }

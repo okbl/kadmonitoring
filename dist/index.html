@@ -94,7 +94,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--acc);box
 .echo{font-size:12.5px;color:var(--ink-2);margin-top:6px}
 .echo.bad{color:var(--acc)}
 
-.drop{margin-top:16px;border:1.5px dashed var(--line-2);border-radius:var(--r);background:var(--bg);
+.drop{margin-top:10px;border:1.5px dashed var(--line-2);border-radius:var(--r);background:var(--bg);
   padding:14px 16px;transition:border-color .15s,background .15s}
 .drop.over{border-color:var(--acc);background:var(--acc-wash)}
 .drop textarea{min-height:104px;resize:vertical;font-size:13px;line-height:1.5;background:var(--surface)}
@@ -227,6 +227,7 @@ body.ext .noext{display:none!important}
 a.btn{text-decoration:none;display:inline-block}
 
 /* ---------- установка расширения ---------- */
+.status{min-height:18px}
 .install{margin-top:14px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
   padding:18px 22px;display:flex;gap:22px;align-items:flex-start;box-shadow:var(--shadow)}
 .install h3{font-size:15px;margin-bottom:6px}
@@ -234,6 +235,8 @@ a.btn{text-decoration:none;display:inline-block}
 .install p{margin:0 0 8px}
 .install ol{margin:0;padding-left:20px}
 .install .btn{flex:none;white-space:nowrap}
+.install.flash{border-color:var(--acc);box-shadow:0 0 0 4px var(--acc-wash)}
+.install{transition:border-color .3s,box-shadow .3s}
 @media (max-width:760px){.install{flex-direction:column}}
 
 /* ---------- список отслеживаемых споров ---------- */
@@ -316,7 +319,7 @@ a.btn{text-decoration:none;display:inline-block}
         </select>
       </label>
       <label><input type="checkbox" id="setNotify"> уведомлять о новых документах</label>
-      <label title="Картотека отдаёт PDF только браузеру, прошедшему её проверку; расширение читает файл через отладчик вкладки — браузер спросит разрешение"><input type="checkbox" id="setPdf"> загружать тексты определений (PDF)</label>
+      <label title="Картотека отдаёт PDF только браузеру, прошедшему её проверку; расширение читает файл через отладчик своей вкладки — браузер на это время показывает полосу «начата отладка»"><input type="checkbox" id="setPdf"> загружать тексты определений (PDF)</label>
       <span class="m"><button class="linkbtn" id="btnExport">скачать все споры файлом</button> · <button class="linkbtn" id="btnImport">загрузить из файла</button></span>
     </div>
     <div id="list"></div>
@@ -342,25 +345,50 @@ a.btn{text-decoration:none;display:inline-block}
         <label class="lb" for="urlInput">Ссылка на карточку дела</label>
         <div class="urlrow">
           <input id="urlInput" type="url" placeholder="https://kad.arbitr.ru/Card/…" autocomplete="off" spellcheck="false">
-          <button class="btn pri srv" id="btnFetch" type="button">Загрузить с kad.arbitr</button>
+          <button class="btn pri" id="btnFetch" type="button">Загрузить с kad.arbitr</button>
           <a class="btn btn-sm" id="urlOpen" target="_blank" rel="noopener noreferrer" hidden>Открыть карточку</a>
         </div>
         <div class="echo" id="urlEcho"></div>
       </div>
     </div>
 
-    <div class="drop" id="drop">
-      <label class="lb" for="paste"><span class="off">Страница карточки</span><span class="srv">Страница карточки — загружается по ссылке; вставьте вручную, если загрузка не удалась</span></label>
-      <textarea id="paste" placeholder="Откройте карточку дела на kad.arbitr.ru, выделите страницу (Ctrl+A), скопируйте (Ctrl+C) и вставьте сюда (Ctrl+V). Либо перетащите в это поле сохранённую страницу — .html или .mhtml."></textarea>
-      <div class="row">
-        <button class="btn pri" id="btnParse">Разобрать</button>
-        <button class="btn btn-sm" id="btnClear">Очистить</button>
-        <span class="echo" id="pasteEcho"></span>
+    <div class="echo status" id="pasteEcho"></div>
+    <p class="hint ext">Карточку загружает расширение в этом браузере — все страницы хронологии и все
+    инстанции. Отслеживаемые споры хранятся <b>только в этом браузере</b> и никуда не отправляются;
+    расширение обращается только к kad.arbitr.ru.</p>
+    <p class="hint srv noext">Карточку загружает программа, запущенная на этом компьютере: она открывает
+    ссылку в браузере без окна, как открыли бы вы, и забирает хронологию дела и тексты определений.
+    Отслеживаемые споры хранятся здесь же, в папке <b>data</b>, и перепроверяются по расписанию.</p>
+    <div class="install off" id="install">
+      <div>
+        <h3>Загрузка по ссылке — через расширение для браузера</h3>
+        <p>Сам сайт обращаться к kad.arbitr не может — это запрещает браузер. Поставьте расширение
+        «Обособленный спор» (один раз, около минуты) и обновите эту страницу. Дальше достаточно
+        ссылки и даты: карточка загрузится сама — все страницы хронологии и все инстанции, —
+        а отслеживаемые споры будут проверяться по расписанию. Список споров у каждого свой и
+        хранится <b>только в его браузере</b>. Chrome, Edge, Яндекс Браузер.</p>
+        <ol>
+          <li>Скачайте архив и распакуйте его в папку, которую не будете удалять.</li>
+          <li>Откройте страницу расширений: <code>chrome://extensions</code>, в Edge — <code>edge://extensions</code>,
+            в Яндекс Браузере — <code>browser://extensions</code>.</li>
+          <li>Включите «Режим разработчика» и нажмите «Загрузить распакованное расширение».</li>
+          <li>Выберите распакованную папку <b>kad-spor-extension</b> и обновите эту страницу.</li>
+        </ol>
       </div>
-      <p class="hint off">Эта страница работает только с тем, что вы вставили: <b>сама она на kad.arbitr не ходит</b> и вставленное никуда не отправляет — разбор идёт в вашем браузере. Чтобы карточки загружались по ссылке и проверялись сами, установите расширение «Обособленный спор» — см. «Инструкцию».</p>
-      <p class="hint ext">Карточку загружает расширение в этом браузере: открывает её во вкладке, как открыли бы вы, и забирает хронологию дела. Отслеживаемые споры хранятся <b>только в этом браузере</b> и никуда не отправляются; расширение обращается только к kad.arbitr.ru.</p>
-      <p class="hint srv noext">Карточку загружает программа, запущенная на этом компьютере: она открывает ссылку в браузере без окна, как открыли бы вы, и забирает хронологию дела и тексты определений. Отслеживаемые споры хранятся здесь же, в папке <b>data</b>, и перепроверяются по расписанию.</p>
+      <a class="btn pri" href="kad-spor-extension.zip" download>Скачать расширение</a>
     </div>
+
+    <details class="adv" id="manual">
+      <summary><span class="caret"></span><span class="srv">Загрузка не удалась? Вставить страницу карточки вручную</span><span class="off">Без расширения: вставить страницу карточки вручную</span></summary>
+      <div class="drop" id="drop">
+        <textarea id="paste" aria-label="Страница карточки" placeholder="Откройте карточку дела на kad.arbitr.ru, выделите страницу (Ctrl+A), скопируйте (Ctrl+C) и вставьте сюда (Ctrl+V). Либо перетащите в это поле сохранённую страницу — .html или .mhtml. Если хронология на нескольких страницах, вставьте их одну за другой."></textarea>
+        <div class="row">
+          <button class="btn pri" id="btnParse">Разобрать</button>
+          <button class="btn btn-sm" id="btnClear">Очистить</button>
+        </div>
+        <p class="hint off">Вставленное никуда не отправляется — разбор идёт в вашем браузере.</p>
+      </div>
+    </details>
 
     <details class="adv">
       <summary><span class="caret"></span>Уточнения — если разбор ошибся</summary>
@@ -426,29 +454,11 @@ a.btn{text-decoration:none;display:inline-block}
 
 <div class="page" id="empty">
   <div class="note" style="margin-top:24px">
-    <b>С чего начать.</b> Укажите дату, когда подано заявление об оспаривании сделки, и
-    <span class="srv">ссылку на карточку дела — нажмите «Загрузить с kad.arbitr».</span><span class="off">вставьте
-    страницу карточки дела.</span> Программа найдёт в ней именно этот обособленный спор — по полю
+    <b>С чего начать.</b> Укажите дату, когда подано заявление об оспаривании сделки, и вставьте
+    ссылку на карточку дела — карточка загрузится сама. Программа найдёт в ней именно этот обособленный спор — по полю
     «В ответ на», которым картотека связывает документы с заявлением, — покажет его движение,
     текущую стадию и то, что требуется от финансового управляющего, со ссылками на нормы и
     расчётом сроков.
-  </div>
-  <div class="install off">
-    <div>
-      <h3>Чтобы карточки загружались и проверялись сами — расширение для браузера</h3>
-      <p>Расширение «Обособленный спор» открывает карточку kad.arbitr в вашем браузере, забирает
-      хронологию дела и тексты определений, проверяет отслеживаемые споры по расписанию и сообщает
-      о новых документах. Список споров у каждого свой и хранится <b>только в его браузере</b> —
-      никуда не отправляется. Работает в Chrome, Edge и Яндекс Браузере.</p>
-      <ol>
-        <li>Скачайте архив и распакуйте его в папку, которую не будете удалять.</li>
-        <li>Откройте страницу расширений: <code>chrome://extensions</code>, в Edge — <code>edge://extensions</code>,
-          в Яндекс Браузере — <code>browser://extensions</code>.</li>
-        <li>Включите «Режим разработчика» и нажмите «Загрузить распакованное расширение».</li>
-        <li>Выберите распакованную папку <b>kad-spor-extension</b>. Значок расширения откроет «Мои споры».</li>
-      </ol>
-    </div>
-    <a class="btn pri" href="kad-spor-extension.zip" download>Скачать расширение</a>
   </div>
 </div>
 
@@ -482,21 +492,24 @@ a.btn{text-decoration:none;display:inline-block}
     <li><b>Дата подачи заявления.</b> Поле принимает <code>23.06.2026</code>,
       <code>23062026</code> (точки подставятся сами), <code>2026-06-23</code> и
       <code>23 июня 2026</code> — последние два можно вставить прямо из документа.</li>
-    <li><b>Ссылка на карточку</b> нужна, чтобы вернуться к делу одним кликом, и сохраняется
-      в файле спора.</li>
-    <li><b>Страница карточки.</b> Откройте карточку на kad.arbitr.ru, нажмите Ctrl+A, затем
-      Ctrl+C и вставьте в поле. Можно перетащить сохранённую страницу (.html, .mhtml).</li>
+    <li><b>Ссылка на карточку дела</b> на kad.arbitr.ru. Вставили — карточка загружается сама:
+      все страницы хронологии (картотека показывает по 30 документов на странице) и все
+      инстанции. Когда есть и ссылка, и дата, спор сразу встаёт на отслеживание.</li>
   </ul>
-  <p><b>Загрузка по ссылке</b> работает в расширении браузера «Обособленный спор» (или в программе,
-  запущенной на компьютере как сервер, см. README): кнопка «Загрузить с kad.arbitr» открывает
-  карточку во вкладке этого же браузера, как открыли бы вы, и забирает хронологию дела. Страница,
-  открытая с сайта или файлом с диска, этого не может: kad.arbitr не разрешает другим сайтам читать
-  свои страницы, — тогда источник данных ваша вставка. Если kad.arbitr попросит пройти проверку «вы
-  не робот», расширение покажет вкладку картотеки: пройдите проверку, и загрузка продолжится.</p>
-  <p class="ext"><b>Установка расширения.</b> Скачайте архив расширения со страницы программы и
-  распакуйте его. В браузере откройте <code>chrome://extensions</code> (в Яндекс Браузере —
+  <p><b>Загрузку делает расширение браузера</b> «Обособленный спор» (или программа, запущенная на
+  компьютере как сервер, см. README). Сайт сам этого не может: kad.arbitr не разрешает другим сайтам
+  читать свои страницы. Поэтому расширение ставится один раз, а дальше эта же страница — на сайте
+  или по значку расширения — работает через него. Расширение запрашивает карточку и её хронологию
+  у kad.arbitr из вашего браузера; если картотека требует проверки, открывает карточку во вкладке,
+  как открыли бы вы. Если kad.arbitr попросит пройти проверку «вы не робот», расширение покажет
+  вкладку картотеки: пройдите проверку и загрузите карточку ещё раз.</p>
+  <p><b>Без расширения</b> остаётся ручной путь: «Вставить страницу карточки вручную» — Ctrl+A,
+  Ctrl+C на странице карточки и Ctrl+V в поле; можно перетащить сохранённую страницу (.html, .mhtml).</p>
+  <p class="noext"><b>Установка расширения.</b> Скачайте архив («Скачать расширение» на этой
+  странице) и распакуйте его. В браузере откройте <code>chrome://extensions</code> (в Яндекс Браузере —
   <code>browser://extensions</code>, в Edge — <code>edge://extensions</code>), включите «Режим
-  разработчика», нажмите «Загрузить распакованное расширение» и выберите распакованную папку.</p>
+  разработчика», нажмите «Загрузить распакованное расширение», выберите распакованную папку и
+  обновите страницу программы.</p>
 
   <h4>2. Как из карточки выделяется спор</h4>
   <p>Картотека связывает документы с заявлением полем «В ответ на». Программа берёт
@@ -544,11 +557,12 @@ a.btn{text-decoration:none;display:inline-block}
   текстами и уточнениями; «Открыть спор» возвращает его обратно. Если вставить в открытый спор
   свежую карточку, новые документы будут помечены. В файле персональные данные участников
   дела — храните его там же, где материалы дела.</p>
-  <p class="ext">«Сохранить спор» ставит спор на отслеживание: он появляется в «Моих спорах», а
-  расширение перепроверяет карточку по расписанию, пока браузер открыт, и показывает уведомление
+  <p class="ext">Спор встаёт на отслеживание сам, как только загружена карточка и указана дата: он
+  появляется в «Моих спорах», а расширение перепроверяет карточку по расписанию, пока браузер открыт, и показывает уведомление
   о новых документах. Документы, появившиеся с последнего просмотра, помечены «новое», а число
   таких споров видно на значке расширения. Все данные — только в этом браузере.</p>
-  <p class="srv noext">«Сохранить спор» ставит спор на отслеживание: он появляется в «Моих спорах», а сервер
+  <p class="srv noext">Спор встаёт на отслеживание сам, как только загружена карточка и указана дата: он
+  появляется в «Моих спорах», а сервер
   перепроверяет карточку по расписанию. Документы, появившиеся с последнего просмотра,
   помечены «новое».</p>
 
@@ -2375,7 +2389,7 @@ a.btn{text-decoration:none;display:inline-block}
     $('urlOpen').hidden = !m;
     if (m) $('urlOpen').href = `https://kad.arbitr.ru/Card/${m[1]}`;
     $('btnFetch').disabled = !m;
-    if (!v) echo('urlEcho', backend ? 'Вставьте ссылку и нажмите «Загрузить с kad.arbitr»' : '');
+    if (!v) echo('urlEcho', backend ? 'Вставьте ссылку — карточка загрузится сама' : '');
     else if (!m) echo('urlEcho', 'Ожидается ссылка вида https://kad.arbitr.ru/Card/…', true);
     else echo('urlEcho', card && card.meta.caseNo ? `Дело ${card.meta.caseNo}` : 'Ссылка на карточку дела');
   }
@@ -2530,6 +2544,7 @@ a.btn{text-decoration:none;display:inline-block}
     $('btnSave').disabled = false;
     $('btnPrint').disabled = false;
     scheduleSave();
+    autoTrack();
   }
 
   /* ---------- отрисовка ---------- */
@@ -2554,7 +2569,7 @@ a.btn{text-decoration:none;display:inline-block}
 
   function reportParse(d) {
     if (!S.card.raw.trim()) {
-      echo('pasteEcho', backend ? 'Карточка ещё не загружена — нажмите «Загрузить с kad.arbitr»' : 'Карточка не вставлена — показано только то, что следует из даты подачи');
+      echo('pasteEcho', backend ? 'Карточка ещё не загружена — вставьте ссылку на неё' : 'Карточка не загружена — показано только то, что следует из даты подачи');
       return;
     }
     const g = card.diagnostics;
@@ -2879,20 +2894,46 @@ a.btn{text-decoration:none;display:inline-block}
     }
   };
 
+  /*
+   * Идентификатор расширения — из открытого ключа в extension/manifest.json;
+   * build.mjs сверяет его с ключом. По нему страница на сайте находит
+   * установленное расширение.
+   */
+  const EXT_ID = 'hocagbfdoeocameodjbbceojgecjcijn';
+
+  /*
+   * Расширение: либо это его собственная страница, либо та же страница на
+   * сайте программы — тогда расширение отвечает ей (externally_connectable).
+   * В обоих случаях разговор идёт внутри браузера; споры хранит расширение.
+   */
   const Ext = {
     kind: 'ext',
     settings: null,
+    remote: false,
     async init() {
       const c = globalThis.chrome;
-      if (!(c && c.runtime && c.runtime.id && c.storage && c.storage.local)) return null;
+      if (!(c && c.runtime)) return null;
+      if (!(c.runtime.id && c.storage && c.storage.local)) {
+        if (!c.runtime.sendMessage) return null;
+        this.remote = true;
+        await this.send({ type: 'ping' });
+      }
       this.settings = await this.send({ type: 'settings' });
       return this;
     },
-    async send(msg) {
-      const r = await chrome.runtime.sendMessage(msg);
-      if (!r) throw new Error('расширение не ответило');
-      if (r.error) throw new Error(r.error);
-      return r;
+    send(msg) {
+      return new Promise((resolve, reject) => {
+        const done = (r) => {
+          const err = chrome.runtime.lastError;
+          if (err || !r) reject(new Error(err ? 'расширение недоступно' : 'расширение не ответило'));
+          else if (r.error) reject(new Error(r.error));
+          else resolve(r);
+        };
+        try {
+          if (this.remote) chrome.runtime.sendMessage(EXT_ID, msg, done);
+          else chrome.runtime.sendMessage(msg, done);
+        } catch (e) { reject(e); }
+      });
     },
     card(url) { return this.send({ type: 'card', url }); },
     async pdf(url) { return (await this.send({ type: 'pdf', url })).text; },
@@ -2910,22 +2951,50 @@ a.btn{text-decoration:none;display:inline-block}
 
   let backend = null;
 
-  $('btnFetch').addEventListener('click', fetchCard);
+  $('btnFetch').addEventListener('click', () => {
+    if (backend) { fetchCard(); return; }
+    $('install').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    $('install').classList.add('flash');
+    setTimeout(() => $('install').classList.remove('flash'), 1600);
+    toast('Загружать карточки по ссылке умеет расширение для браузера — установите его, это один раз');
+  });
+
+  /*
+   * Вставили ссылку — карточка загружается сама, без кнопки. Дату можно
+   * ввести и потом: разбор пересчитается.
+   */
+  let loading = false;
+  let autoFor = '';
+  $('urlInput').addEventListener('input', () => {
+    const m = S.url.match(KAD_URL);
+    if (!backend || !m || loading || autoFor === m[1]) return;
+    autoFor = m[1];
+    fetchCard();
+  });
 
   async function fetchCard() {
     readUrl();
     if (!KAD_URL.test(S.url)) { toast('Нужна ссылка на карточку kad.arbitr.ru'); return; }
+    if (loading) return;
+    loading = true;
+    autoFor = S.url.match(KAD_URL)[1];
     const done = busy($('btnFetch'), 'Загружаю…');
-    echo('pasteEcho', 'Открываю карточку на kad.arbitr.ru — обычно это занимает 10–60 секунд…');
+    echo('pasteEcho', 'Загружаю карточку с kad.arbitr.ru — все страницы хронологии; обычно это 5–60 секунд…');
     try {
       const r = await backend.card(S.url);
       setCard(r.text, false, r.source || 'kad.arbitr', r.at);
       run();
       if (r.note) toast(r.note);
+      if (!S.filed) {
+        echo('dateEcho', 'Укажите дату подачи заявления — по ней программа найдёт спор в карточке', true);
+        dateInput.focus();
+      }
       await loadActs();
     } catch (err) {
-      echo('pasteEcho', `Карточку загрузить не удалось: ${err.message}. Можно вставить страницу вручную (Ctrl+A, Ctrl+C на странице карточки).`, true);
+      echo('pasteEcho', `Карточку загрузить не удалось: ${err.message}.`, true);
+      $('manual').open = true;
     } finally {
+      loading = false;
       done();
     }
   }
@@ -3034,8 +3103,19 @@ a.btn{text-decoration:none;display:inline-block}
   });
 
   async function saveTracked() {
-    S.id = await backend.save(snapshot());
-    if (location.hash !== `#d=${S.id}`) history.replaceState(null, '', `#d=${S.id}`);
+    const mine = S;
+    mine.id = await backend.save(snapshot());
+    if (S === mine && location.hash !== `#d=${mine.id}`) history.replaceState(null, '', `#d=${mine.id}`);
+  }
+
+  /* Дата есть, карточка загружена по ссылке — спор сразу ставится на отслеживание. */
+  let tracking = null;
+  function autoTrack() {
+    if (!backend || S.id || tracking || !S.filed || S.card.source !== 'kad.arbitr') return;
+    tracking = saveTracked()
+      .then(() => toast('Спор поставлен на отслеживание — он в «Моих спорах»'))
+      .catch((err) => toast(`Не сохранено: ${err.message}`))
+      .finally(() => { tracking = null; });
   }
 
   /* Отслеживаемый спор сохраняется сам — после каждого изменения. */
@@ -3074,7 +3154,7 @@ a.btn{text-decoration:none;display:inline-block}
   function renderList(items) {
     $('listNote').textContent = backend.note();
     if (!items.length) {
-      $('list').innerHTML = '<div class="note">Отслеживаемых споров пока нет. Нажмите «Новый спор», укажите дату подачи и ссылку на карточку, нажмите «Загрузить с kad.arbitr» и «Сохранить спор».</div>';
+      $('list').innerHTML = '<div class="note">Отслеживаемых споров пока нет. Нажмите «Новый спор», вставьте ссылку на карточку и укажите дату подачи заявления — карточка загрузится, а спор встанет на отслеживание сам.</div>';
       return;
     }
     $('list').innerHTML = items.map((it) => {
@@ -3183,16 +3263,7 @@ a.btn{text-decoration:none;display:inline-block}
   }
   $('setHours').addEventListener('change', (e) => saveSettings({ checkHours: +e.target.value }));
   $('setNotify').addEventListener('change', (e) => saveSettings({ notify: e.target.checked }));
-  $('setPdf').addEventListener('change', async (e) => {
-    // Тексты определений картотека отдаёт только браузеру, прошедшему её
-    // проверку; расширение читает их через отладчик вкладки — это отдельное
-    // разрешение, и браузер спросит его сам.
-    if (e.target.checked) {
-      const ok = await chrome.permissions.request({ permissions: ['debugger'] }).catch(() => false);
-      if (!ok) { e.target.checked = false; toast('Без разрешения тексты определений загружаться не будут'); return; }
-    }
-    saveSettings({ pdfTexts: e.target.checked });
-  });
+  $('setPdf').addEventListener('change', (e) => saveSettings({ pdfTexts: e.target.checked }));
 
   /* ---------- прочее ---------- */
 

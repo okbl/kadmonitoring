@@ -67,13 +67,22 @@ fetch('/Kad/InstanceDocumentsPage?_=' + Date.now() + '&id=inst1&caseId=${CASE}&w
 </script>
 </body></html>`;
 
+const passed = (req) => /(?:^|;\s*)passed=1/.test(req.headers.cookie || '');
+
+/* Страница проверки браузера: скрипт ставит cookie и уводит дальше. */
+const challenge = (to) => `<!DOCTYPE html><html><body><script>setTimeout(function(){document.cookie='passed=1; path=/';location.href=${JSON.stringify(to)}},300)</script></body></html>`;
+
 /**
  * pdf — Buffer с PDF, который отдаётся на любой /Document/Pdf/…;
- * wall — показывать страницу проверки вместо карточки.
+ * wall — показывать страницу проверки «вы не робот» вместо карточки;
+ * cardCheck — карточку отдавать только браузеру, прошедшему проверку
+ * (как PDF): без cookie вместо неё страница со скриптом;
+ * site — страница программы, отдаётся по /site/ (как с сайта на Pages).
  */
-export function startMock({ pdf, wall = false } = {}) {
+export function startMock({ pdf, wall = false, cardCheck = false, site = '' } = {}) {
   const hits = [];
   const setPdf = (b) => { pdf = b; };
+  const setSite = (html) => { site = html; };
   const server = http.createServer((req, res) => {
     const u = new URL(req.url, 'http://x');
     hits.push(u.pathname);
@@ -83,7 +92,11 @@ export function startMock({ pdf, wall = false } = {}) {
     }
     if (u.pathname.startsWith('/Card/')) {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      return res.end(CARD_HTML);
+      return res.end(cardCheck && !passed(req) ? challenge(u.pathname) : CARD_HTML);
+    }
+    if (u.pathname === '/site/' && site) {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      return res.end(site);
     }
     if (u.pathname === '/Kad/InstanceDocumentsPage') {
       if (req.headers['x-requested-with'] !== 'XMLHttpRequest') { res.writeHead(451); return res.end(); }
@@ -93,10 +106,11 @@ export function startMock({ pdf, wall = false } = {}) {
     // Как у настоящей картотеки: без cookie проверки вместо PDF — страница со
     // скриптом, который ставит cookie и уводит на /Document/Pdf/…?isAddStamp=True.
     if (/^\/(?:Document\/Pdf|Kad\/PdfDocument)\//.test(u.pathname) && pdf) {
-      if (!/(?:^|;\s*)passed=1/.test(req.headers.cookie || '')) {
-        const to = u.pathname.replace('/Kad/PdfDocument/', '/Document/Pdf/') + '?isAddStamp=True';
+      // Как у kad: файл — только переходу во вкладке, прошедшей проверку;
+      // прямой запрос (fetch) получает страницу проверки даже с cookie.
+      if (!passed(req) || req.headers['sec-fetch-mode'] !== 'navigate') {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        return res.end(`<!DOCTYPE html><html><body><script>setTimeout(function(){document.cookie='passed=1; path=/';location.href=${JSON.stringify(to)}},300)</script></body></html>`);
+        return res.end(challenge(u.pathname.replace('/Kad/PdfDocument/', '/Document/Pdf/') + '?isAddStamp=True'));
       }
       res.writeHead(200, { 'Content-Type': 'application/pdf' });
       return res.end(pdf);
@@ -109,6 +123,6 @@ export function startMock({ pdf, wall = false } = {}) {
     res.end();
   });
   return new Promise((resolve) => server.listen(0, '127.0.0.1', () => {
-    resolve({ base: `http://127.0.0.1:${server.address().port}`, hits, setPdf, close: () => new Promise((r) => server.close(r)) });
+    resolve({ base: `http://127.0.0.1:${server.address().port}`, hits, setPdf, setSite, close: () => new Promise((r) => server.close(r)) });
   }));
 }

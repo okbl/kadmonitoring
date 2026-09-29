@@ -11,6 +11,7 @@
  * Сервер (server.mjs) отдаёт страницу, собирая её на лету: правки в src/
  * видны после обновления страницы, без отдельного шага сборки.
  */
+import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import zlib from 'zlib';
@@ -71,16 +72,31 @@ const EXT_FILES = {
 };
 
 /**
- * Файлы расширения: { путь: Buffer }. base — адрес картотеки (только для
- * тестов: макет вместо kad.arbitr.ru); debugger — разрешение сразу, а не
- * по запросу (тестам некому нажать «Разрешить»).
+ * Идентификатор расширения — из открытого ключа в manifest.json (поле key):
+ * у распакованного расширения он тогда один и тот же на любом компьютере,
+ * и страница на сайте находит расширение по нему (src/app.js, EXT_ID).
  */
-export function extensionFiles({ base = '', debuggerAtInstall = false } = {}) {
+export function extensionId(manifest = readManifest()) {
+  const hash = crypto.createHash('sha256').update(Buffer.from(manifest.key, 'base64')).digest('hex');
+  return [...hash.slice(0, 32)].map((h) => String.fromCharCode(97 + parseInt(h, 16))).join('');
+}
+
+const readManifest = () => JSON.parse(fs.readFileSync(path.join(root, 'extension', 'manifest.json'), 'utf8'));
+
+/**
+ * Файлы расширения: { путь: Buffer }. Только для тестов: base — адрес
+ * картотеки (макет вместо kad.arbitr.ru), site — адрес страницы, которой
+ * расширение отвечает вместо сайта программы.
+ */
+export function extensionFiles({ base = '', site = '' } = {}) {
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-  const manifest = JSON.parse(fs.readFileSync(path.join(root, 'extension', 'manifest.json'), 'utf8'));
+  const manifest = readManifest();
   manifest.version = pkg.version;
   if (base) manifest.host_permissions.push(`${new URL(base).origin}/*`);
-  if (debuggerAtInstall) manifest.permissions.push('debugger');
+  if (site) manifest.externally_connectable.matches.push(`${new URL(site).origin}/*`);
+  const id = extensionId(manifest);
+  if (!fs.readFileSync(src('app.js'), 'utf8').includes(`'${id}'`))
+    throw new Error(`в src/app.js другой EXT_ID — должен быть '${id}' (из ключа в extension/manifest.json)`);
 
   const out = {};
   for (const [name, file] of Object.entries(EXT_FILES)) {
