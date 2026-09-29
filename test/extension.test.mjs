@@ -109,7 +109,7 @@ test('расширение: только ссылка и дата — карто
     ContentTypes: ['Об отложении судебного разбирательства'], HearingDate: null });
   await page.click('[data-check]');
   await page.waitForFunction(() => /новое: 1/.test(document.getElementById('list').textContent), null, { timeout: 180000 });
-  assert.deepEqual(await steps(), ['direct', 'direct-api', 'direct-api-referer']);
+  assert.deepEqual(await steps(), ['direct', 'direct-api']);
 
   const after = await sw.evaluate(() => chrome.storage.local.get(null));
   const st2 = after[`d:${after.ids[0]}`];

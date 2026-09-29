@@ -245,19 +245,15 @@ async function collectDirect(url, caseId) {
   const instances = instancesIn(html);
   trace('direct', { status: r.status, htmlLen: html.length, instances: instances.length });
   if (!instances.length) return null;
-  let got = await collectInPage(caseId, instances, BASE);
-  trace('direct-api', { items: got.items.length, pages: got.pages, fails: got.fails });
-  if (!got.items.length) {
-    // Запрос из фоновой части отличается от запроса со страницы карточки
-    // заголовками Referer и Origin — повтор с такими же, как у страницы.
-    await pageHeaders(toBase(url));
-    try {
-      got = await collectInPage(caseId, instances, BASE);
-    } finally {
-      await pageHeaders(null);
-    }
-    trace('direct-api-referer', { items: got.items.length, pages: got.pages, fails: got.fails });
+  // Без Referer карточки API отвечает запросу расширения 403 (проверено на kad).
+  const rule = await pageHeaders(toBase(url), caseId);
+  let got;
+  try {
+    got = await collectInPage(caseId, instances, BASE);
+  } finally {
+    await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: [rule] }).catch(() => {});
   }
+  trace('direct-api', { items: got.items.length, pages: got.pages, fails: got.fails });
   if (!got.items.length) return null;
   let pageText = C.htmlToText(html);
   if (BASE !== KAD) pageText = pageText.split(BASE).join(KAD);
@@ -265,24 +261,30 @@ async function collectDirect(url, caseId) {
 }
 
 /*
- * Запросам фоновой части к API картотеки — заголовки страницы карточки:
- * Referer — сама карточка, Origin — картотека. Правило сессии действует
- * только на запросы не из вкладок, то есть самого расширения; null — снять.
+ * Запросам расширения к API хронологии дела — заголовки страницы карточки:
+ * Referer — сама карточка, без Origin. Правило сессии — на запросы этого
+ * дела и не из вкладок, то есть самого расширения; своё у каждой загрузки,
+ * чтобы одновременные загрузки не мешали друг другу. Возвращает номер правила.
  */
-async function pageHeaders(cardUrl) {
-  const rule = cardUrl && {
-    id: 1,
-    priority: 1,
-    action: {
-      type: 'modifyHeaders',
-      requestHeaders: [
-        { header: 'Referer', operation: 'set', value: cardUrl },
-        { header: 'Origin', operation: 'remove' }
-      ]
-    },
-    condition: { urlFilter: `|${BASE}/Kad/`, tabIds: [chrome.tabs.TAB_ID_NONE] }
-  };
-  await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: [1], addRules: rule ? [rule] : [] });
+let ruleNo = 0;
+async function pageHeaders(cardUrl, caseId) {
+  const id = 1 + (ruleNo++ % 1000);
+  await chrome.declarativeNetRequest.updateSessionRules({
+    removeRuleIds: [id],
+    addRules: [{
+      id,
+      priority: 1,
+      action: {
+        type: 'modifyHeaders',
+        requestHeaders: [
+          { header: 'Referer', operation: 'set', value: cardUrl },
+          { header: 'Origin', operation: 'remove' }
+        ]
+      },
+      condition: { urlFilter: `|${BASE}/Kad/InstanceDocumentsPage?*caseId=${caseId}`, tabIds: [chrome.tabs.TAB_ID_NONE] }
+    }]
+  });
+  return id;
 }
 
 /* Вкладка: карточку открывает браузер, как открыл бы человек, — со всеми проверками картотеки. */
