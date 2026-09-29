@@ -90,7 +90,43 @@ try {
         formAttrs: [...d1.forms].map((x) => [...x.attributes].map((a) => `${a.name}=${anon(a.value)}`).join(' ')),
         bodyTags: [...new Set([...d1.body.querySelectorAll('*')].map((x) => x.tagName))].slice(0, 20)
       };
-      out.challengeHtml = t1.replace(/[A-Za-z0-9+/=_-]{24,}/g, (m) => `<${m.length}>`).replace(/[0-9a-f]{8}-[0-9a-f-]{27}/gi, '<id>').replace(/\s+/g, ' ').slice(0, 3000);
+      out.challengeHtml = t1.replace(/<input id="datat"[^>]*>/, '<datat>').replace(/[A-Za-z0-9+/=_-]{24,}/g, (m) => `<${m.length}>`).replace(/[0-9a-f]{8}-[0-9a-f-]{27}/gi, '<id>').replace(/\s+/g, ' ').slice(0, 3000);
+      // Раскодированный скрипт проверки (код картотеки, без данных дела).
+      const datat = (d1.getElementById('datat') || {}).value || '';
+      const code = datat.split('\n').map((l) => String.fromCharCode(parseInt([...l].map((c) => (c === '\t' ? '1' : '0')).join(''), 2))).join('');
+      res.decoded = anon(code.slice(0, -1)).replace(/[A-Za-z0-9+/=_-]{24,}/g, (m) => `<${m.length}>`).slice(0, 4000);
+      // Проверка в своей рамке: отправку формы перехватываем, запрос делаем сами.
+      try {
+        const fr0 = document.createElement('iframe');
+        fr0.style.cssText = 'position:fixed;left:-50px;top:0;width:10px;height:10px;opacity:0';
+        document.body.append(fr0);
+        const w = fr0.contentWindow;
+        const how = [];
+        const cap = new Promise((resolve) => {
+          const grab = (form, via) => { how.push(via); resolve(new URLSearchParams(new w.FormData(form)).toString()); };
+          w.HTMLFormElement.prototype.submit = function () { grab(this, 'submit()'); };
+          w.HTMLFormElement.prototype.requestSubmit = function () { grab(this, 'requestSubmit()'); };
+          w.addEventListener('submit', (e) => { e.preventDefault(); grab(e.target, 'событие submit'); }, true);
+          setTimeout(() => resolve(null), 20000);
+        });
+        w.document.open();
+        try { w.history.replaceState(null, '', f1.url); } catch (e) { how.push('replaceState: ' + e.message); }
+        w.document.write(t1);
+        w.document.close();
+        const t0 = Date.now();
+        const body = await cap;
+        res.own = { captured: !!body, via: how, ms: Date.now() - t0, fields: body ? [...new URLSearchParams(body).keys()] : [], frameUrl: anon(w.location.href) };
+        if (body) {
+          const pr = await fetch(f1.url, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
+          const pb = await pr.arrayBuffer();
+          res.own.post = { status: pr.status, type: pr.headers.get('content-type'), pdf: isPdf(pb), len: pb.byteLength };
+          // Второй раз — уже с cookies проверки: нужен ли новый token для каждого файла?
+          const g2 = await fetch(url, { credentials: 'include' });
+          const gb = await g2.arrayBuffer();
+          res.own.getAfter = { type: g2.headers.get('content-type'), pdf: isPdf(gb), len: gb.byteLength };
+        }
+        fr0.remove();
+      } catch (e) { res.own = { error: e.message }; }
       // Рамка: ждём дольше, смотрим, что она загрузила.
       const fr = document.createElement('iframe');
       fr.style.cssText = 'position:fixed;left:-50px;top:0;width:10px;height:10px;opacity:0';
