@@ -142,22 +142,3 @@ test('расширение: только ссылка и дата — карто
   assert.equal(all.ids.length, 2, 'второй спор — из страницы на сайте, в том же хранилище');
   assert.deepEqual(errors, []);
 });
-
-test('сайт без расширения: кнопка загрузки ведёт к установке, вставка — запасной путь', async (t) => {
-  let pw;
-  try { pw = await import('playwright-core'); } catch (_) { pw = null; }
-  const exe = chromiumPath();
-  if (!exe || !pw) { t.skip('нет Chromium'); return; }
-  const mock = await startMock({ site: assemble() });
-  const browser = await pw.chromium.launch({ executablePath: exe, headless: true });
-  t.after(async () => { await browser.close(); await mock.close(); });
-  const page = await browser.newPage();
-  await page.goto(`${mock.base}/site/`);
-  await page.waitForSelector('#install', { state: 'visible' });
-  assert.equal(await page.isVisible('#paste'), false, 'поле вставки свёрнуто');
-  await page.fill('#urlInput', CARD);
-  await page.click('#btnFetch');
-  await page.waitForSelector('#install.flash');
-  await page.click('#manual summary');
-  assert.equal(await page.isVisible('#paste'), true);
-});

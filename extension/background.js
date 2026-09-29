@@ -22,13 +22,15 @@ import './kad.js';
 import './rules.js';
 import './dispute.js';
 import './kad-items.js';
+import './kad-page.js';
 import './pdf-text.js';
+import './tracker.js';
 // pdf.js без отдельного потока: в фоновой части расширения нет Worker,
 // а модуль обработчика, загруженный заранее, pdf.js находит сам.
 import './pdf.worker.min.mjs';
 import { getDocument } from './pdf.min.mjs';
 
-const { KadCard: C, KadDispute: X, KadDates: D, KadItems: I, KadPdf: P } = globalThis;
+const { KadCard: C, KadDates: D, KadItems: I, KadPdf: P, KadPage: K, KadTracker: T } = globalThis;
 
 const KAD = 'https://kad.arbitr.ru';
 // Адрес картотеки подменяется только в тестовой сборке — на макет.
@@ -37,93 +39,16 @@ const toBase = (u) => BASE === KAD ? u : u.replace(/^https?:\/\/(?:www\.)?kad\.a
 const KAD_CARD = new RegExp(`^https?://(?:www\\.)?kad\\.arbitr\\.ru/Card/(${C.GUID})`, 'i');
 const KAD_PDF = /^https?:\/\/(?:www\.)?kad\.arbitr\.ru\/(?:Document\/Pdf|Kad\/PdfDocument)\//i;
 
-const DEFAULTS = { checkHours: 4, notify: true, pdfTexts: true };
-/* Поля, которые ведёт фоновая часть: страница их не присылает и не затирает. */
-const KEEP = ['createdAt', 'checkedAt', 'error', 'note', 'notified'];
-
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const store = chrome.storage.local;
-const isAct = (e) => !e.rec.synthetic && /^(?:ruling|decision|appealRuling|protocol|courtDoc)$/.test(e.cls.nature || '');
 
-/* ---------- хранилище ---------- */
+/* ---------- споры: общий код с сайтом (src/tracker.js), хранилище — этого браузера ---------- */
 
-async function settings() {
-  const { settings: s } = await store.get('settings');
-  return { ...DEFAULTS, ...(s || {}) };
-}
-
-async function ids() {
-  const { ids: list } = await store.get('ids');
-  return Array.isArray(list) ? list : [];
-}
-
-async function load(id) {
-  const k = `d:${id}`;
-  return (await store.get(k))[k] || null;
-}
-
-async function put(st) {
-  await store.set({ [`d:${st.id}`]: st });
-  const list = await ids();
-  if (!list.includes(st.id)) await store.set({ ids: [...list, st.id] });
-}
-
-async function drop(id) {
-  await store.remove(`d:${id}`);
-  await store.set({ ids: (await ids()).filter((x) => x !== id) });
-}
-
-const newId = () => [...crypto.getRandomValues(new Uint8Array(6))].map((b) => b.toString(16).padStart(2, '0')).join('');
-
-/* ---------- анализ тем же кодом, что на странице ---------- */
-
-function analyze(st) {
-  const card = st.card && st.card.raw
-    ? C.parse(st.card.raw, { html: st.card.html })
-    : { meta: {}, records: [], diagnostics: {} };
-  const d = X.build(card, {
-    filedDate: st.filed, applicant: st.applicant, role: st.role, hearing: st.hearing, subject: st.subject,
-    texts: st.texts || {}, rootId: st.rootId, include: st.include, exclude: st.exclude, known: st.known
-  });
-  return { card, d, summary: { ...X.summary(d), debtor: card.meta.debtor || '' } };
-}
-
-async function save(state) {
-  const prev = state.id ? await load(state.id) : null;
-  const st = { ...state, app: 'kadmonitoring' };
-  delete st.summary;
-  for (const k of KEEP) {
-    if (prev && prev[k] !== undefined) st[k] = prev[k];
-    else delete st[k];
-  }
-  const now = new Date().toISOString();
-  st.id = prev ? prev.id : newId();
-  st.createdAt = st.createdAt || now;
-  st.savedAt = now;
-  // То, что видно при постановке на отслеживание, новым не считается.
-  if (!prev) st.notified = [...(st.known || [])];
-  st.summary = analyze(st).summary;
-  await put(st);
-  await badge();
-  return st.id;
-}
-
-async function listItems() {
-  const out = [];
-  for (const id of await ids()) {
-    const st = await load(id);
-    if (!st) continue;
-    let summary;
-    // Сводка пересчитывается: «осталось N дней» и «истёк срок» зависят от сегодняшней даты.
-    try { summary = analyze(st).summary; } catch (e) { summary = { stageLabel: 'ошибка разбора', tone: 'bad' }; }
-    out.push({
-      id, filed: st.filed, url: st.url, error: st.error || null, savedAt: st.savedAt || null,
-      checkedAt: st.checkedAt || (st.card && st.card.source === 'kad.arbitr' && st.card.at) || null,
-      summary
-    });
-  }
-  return out.sort((a, b) => String(b.savedAt || '').localeCompare(String(a.savedAt || '')));
-}
+const store = {
+  get: async (k) => (await chrome.storage.local.get(k))[k],
+  set: (k, v) => chrome.storage.local.set({ [k]: v }),
+  remove: (k) => chrome.storage.local.remove(k)
+};
+const tracker = T.create({ store, card: (url) => cardText(url), pdf: (url) => pdfText(url) });
 
 /* ---------- карточка: вкладка картотеки и её API ---------- */
 
@@ -142,16 +67,6 @@ async function inTab(tabId, func, args = [], ms = 30000) {
   const run = chrome.scripting.executeScript({ target: { tabId }, world: 'MAIN', func, args });
   const res = await Promise.race([run, sleep(ms).then(() => { throw new Error('страница картотеки не ответила вовремя'); })]);
   return res && res[0] ? res[0].result : null;
-}
-
-/* Инстанции дела в разметке карточки: скрытые поля js-instanceId. */
-function instancesIn(html) {
-  const ids = new Set();
-  for (const m of html.matchAll(/<input\b[^>]*\bjs-instanceId\b[^>]*>/gi)) {
-    const v = m[0].match(/\bvalue\s*=\s*["']([^"']+)["']/i);
-    if (v) ids.add(v[1]);
-  }
-  return [...ids];
 }
 
 /*
@@ -182,49 +97,14 @@ function pageState() {
   };
 }
 
-/*
- * Все страницы хронологии каждой инстанции — через тот же API, которым
- * пользуется сама карточка. Выполняется во вкладке картотеки (base пустой)
- * либо в фоновой части (base — адрес картотеки); во вкладке заодно отдаёт
- * текст страницы — на случай, если API ответит не так, как ожидается.
- */
-async function collectInPage(caseId, instances, base = '') {
-  const items = [];
-  const pages = [];
-  const fails = [];
-  for (const id of instances) {
-    let count = 0;
-    for (let page = 1; page <= 200; page++) {
-      const url = `${base}/Kad/InstanceDocumentsPage?_=${Date.now()}&id=${encodeURIComponent(id)}&caseId=${encodeURIComponent(caseId)}&perPage=30&page=${page}`;
-      let j = null;
-      let why = null;
-      try {
-        const r = await fetch(url, { credentials: 'include', headers: { 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json, text/javascript, */*; q=0.01' } });
-        const body = await r.text();
-        try { j = JSON.parse(body); } catch (_) { j = null; }
-        if (!(j && j.Result && j.Result.Items && j.Result.Items.length)) {
-          // Ответ без записей: страница проверки или ошибка — содержания дела в нём нет.
-          why = { status: r.status, type: r.headers.get('content-type'), len: body.length,
-            sample: j && j.Result && j.Result.Items ? 'пустой список' : body.replace(/\s+/g, ' ').slice(0, 160) };
-        }
-      } catch (e) { why = { error: String(e && e.message || e) }; }
-      const res = j && j.Result;
-      const list = (res && res.Items) || [];
-      items.push(...list);
-      if (why && page === 1) fails.push(why);
-      if (list.length) count = page;
-      if (!list.length || page >= ((res && res.PagesCount) || 1)) break;
-      await new Promise((ok) => setTimeout(ok, 300));
-    }
-    pages.push(count);
-  }
-  if (typeof document === 'undefined') return { items, pages, fails, pageText: '' };
+/* Выполняется во вкладке картотеки: текст страницы, ссылки на PDF — отдельными строками. */
+function pageTextInTab() {
   for (const a of document.querySelectorAll('a[href*="/PdfDocument/"], a[href*="/Document/Pdf/"]')) {
     const div = document.createElement('div');
     div.textContent = 'PDF: ' + a.href;
     a.after(div);
   }
-  return { items, pages, fails, pageText: document.body ? document.body.innerText : '' };
+  return document.body ? document.body.innerText : '';
 }
 
 /*
@@ -242,14 +122,14 @@ const trace = (step, info) => { globalThis.kadTrace.push({ step, ...info }); };
 async function collectDirect(url, caseId) {
   const r = await fetch(toBase(url), { credentials: 'include' });
   const html = r.ok ? await r.text() : '';
-  const instances = instancesIn(html);
+  const instances = K.instancesIn(html);
   trace('direct', { status: r.status, htmlLen: html.length, instances: instances.length });
   if (!instances.length) return null;
   // Без Referer карточки API отвечает запросу расширения 403 (проверено на kad).
   const rule = await pageHeaders(toBase(url), caseId);
   let got;
   try {
-    got = await collectInPage(caseId, instances, BASE);
+    got = await K.chronology(caseId, instances, BASE);
   } finally {
     await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: [rule] }).catch(() => {});
   }
@@ -312,9 +192,9 @@ async function collectInTab(url, caseId) {
         ? 'страница карточки открылась, но хронологии дела на ней нет — возможно, картотека изменила устройство страницы'
         : 'страница карточки не открылась — kad.arbitr не отвечает или недоступен');
     }
-    const r = await inTab(tab.id, collectInPage, [caseId, state.instances], 180000);
+    const r = await inTab(tab.id, K.chronology, [caseId, state.instances], 180000);
     trace('tab-api', { items: r && r.items ? r.items.length : 0, pages: r && r.pages, fails: r && r.fails });
-    let pageText = (r && r.pageText) || '';
+    let pageText = (await inTab(tab.id, pageTextInTab).catch(() => '')) || '';
     if (BASE !== KAD) pageText = pageText.split(BASE).join(KAD);
     const items = (r && r.items) || [];
     return { pageText, apiText: items.length ? I.itemsToText(items, caseId) : '', apiItems: items.length, pages: r && r.pages };
@@ -337,12 +217,7 @@ async function collect(url) {
 
 async function cardText(url) {
   if (!KAD_CARD.test(String(url || ''))) throw new Error('нужна ссылка вида https://kad.arbitr.ru/Card/…');
-  const r = await collect(url);
-  const got = I.chooseText(r, url.match(KAD_CARD)[0]);
-  // Хронология длиннее одной страницы картотеки — сказать, что взяты все.
-  const pages = (r.pages || []).reduce((a, b) => a + b, 0);
-  const note = pages > 1 && r.apiItems ? `${got.note} (все ${pages} стр. хронологии)` : got.note;
-  return { text: got.text, note, at: new Date().toISOString(), source: 'kad.arbitr' };
+  return I.cardFrom(await collect(url), url.match(KAD_CARD)[0]);
 }
 
 /* ---------- тексты определений ---------- */
@@ -405,43 +280,11 @@ async function pdfText(url) {
 /* ---------- проверка ---------- */
 
 async function check(id, why) {
-  const st = await load(id);
-  if (!st) throw new Error('нет такого спора');
-  if (!KAD_CARD.test(st.url || '')) throw new Error('у спора нет ссылки на карточку kad.arbitr');
-  const s = await settings();
-  try {
-    const got = await cardText(st.url);
-    const card = { raw: got.text, html: false, source: 'kad.arbitr', at: got.at };
-    const texts = { ...(st.texts || {}) };
-    if (s.pdfTexts) {
-      const a0 = analyze({ ...st, card, texts });
-      const todo = a0.d.events.filter((e) => isAct(e) && e.rec.pdf && !texts[e.rec.id]).slice(-6);
-      for (const e of todo) {
-        try { const t = await pdfText(e.rec.pdf); if (t) texts[e.rec.id] = t; } catch (_) { /* следующий */ }
-      }
-    }
-    // Пока шла проверка, страница могла сохранить правки — берём свежую копию.
-    const cur = (await load(id)) || st;
-    cur.card = card;
-    cur.texts = { ...texts, ...(cur.texts || {}) };
-    cur.checkedAt = new Date().toISOString();
-    cur.error = null;
-    cur.note = got.note;
-    const a = analyze(cur);
-    const fresh = a.d.events.filter((e) => e.isNew && !(cur.notified || []).includes(e.rec.id));
-    if (fresh.length) cur.notified = [...(cur.notified || []), ...fresh.map((e) => e.rec.id)].slice(-500);
-    cur.summary = a.summary;
-    await put(cur);
-    if (fresh.length && s.notify && why === 'plan') notify(cur, a, fresh);
-    await badge();
-    return { summary: a.summary, fresh: fresh.length, note: got.note };
-  } catch (err) {
-    const cur = (await load(id)) || st;
-    cur.checkedAt = new Date().toISOString();
-    cur.error = String((err && err.message) || err).slice(0, 300);
-    await put(cur);
-    throw err;
-  }
+  const s = await tracker.settings();
+  const r = await tracker.check(id);
+  if (r.fresh.length && s.notify && why === 'plan') notify(r.st, r.a, r.fresh);
+  await badge();
+  return { summary: r.a.summary, fresh: r.fresh.length, note: r.st.note };
 }
 
 let running = false;
@@ -450,7 +293,7 @@ async function checkAll(why) {
   running = true;
   let n = 0;
   try {
-    for (const id of await ids()) {
+    for (const id of await tracker.ids()) {
       try { await check(id, why); n++; } catch (_) { /* ошибка записана в спор */ }
       // Картотеку не нагружаем: между карточками — пауза.
       await sleep(15000);
@@ -474,11 +317,7 @@ function notify(st, a, fresh) {
 }
 
 async function badge() {
-  let n = 0;
-  for (const id of await ids()) {
-    const st = await load(id);
-    if (st && st.summary && st.summary.newEvents) n++;
-  }
+  const n = await tracker.withNew();
   await chrome.action.setBadgeBackgroundColor({ color: '#8D321F' });
   await chrome.action.setBadgeText({ text: n ? String(n) : '' });
 }
@@ -499,9 +338,9 @@ async function arm(s) {
   if (s.checkHours > 0) await chrome.alarms.create('check', { periodInMinutes: s.checkHours * 60 });
 }
 
-chrome.runtime.onInstalled.addListener(async () => { await arm(await settings()); await badge(); });
+chrome.runtime.onInstalled.addListener(async () => { await arm(await tracker.settings()); await badge(); });
 chrome.runtime.onStartup.addListener(async () => {
-  if (!(await chrome.alarms.get('check'))) await arm(await settings());
+  if (!(await chrome.alarms.get('check'))) await arm(await tracker.settings());
   await badge();
 });
 chrome.alarms.onAlarm.addListener((al) => { if (al.name === 'check') checkAll('plan'); });
@@ -517,21 +356,19 @@ chrome.notifications.onClicked.addListener((nid) => {
 async function handle(msg) {
   switch (msg && msg.type) {
     case 'settings': {
-      if (msg.set) {
-        const s = { ...(await settings()), ...msg.set };
-        await store.set({ settings: s });
-        await arm(s);
-      }
-      return settings();
+      if (!msg.set) return tracker.settings();
+      const s = await tracker.settings(msg.set);
+      await arm(s);
+      return s;
     }
-    case 'list': return { items: await listItems() };
+    case 'list': return { items: await tracker.list() };
     case 'get': {
-      const st = await load(msg.id);
+      const st = await tracker.load(msg.id);
       if (!st) throw new Error('нет такого спора');
       return { state: st };
     }
-    case 'save': return { id: await save(msg.state) };
-    case 'remove': await drop(msg.id); await badge(); return { ok: true };
+    case 'save': { const id = await tracker.save(msg.state); await badge(); return { id }; }
+    case 'remove': await tracker.remove(msg.id); await badge(); return { ok: true };
     case 'card': return cardText(msg.url);
     case 'pdf': return { text: await pdfText(msg.url) };
     case 'check': return check(msg.id, 'button');

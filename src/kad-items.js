@@ -154,5 +154,17 @@
     throw e;
   }
 
-  globalThis.KadItems = { itemsToText, chooseText, ruDate };
+  /*
+   * Итог загрузки карточки: лучший из двух текстов и заметка — сколько
+   * документов и что взяты все страницы хронологии, если их несколько.
+   * r — { pageText, apiText, apiItems, pages: [страниц у каждой инстанции] }.
+   */
+  function cardFrom(r, url) {
+    const got = chooseText(r, url);
+    const pages = (r.pages || []).reduce((a, b) => a + b, 0);
+    const note = pages > 1 && r.apiItems ? `${got.note} (все ${pages} стр. хронологии)` : got.note;
+    return { text: got.text, note, at: new Date().toISOString(), source: 'kad.arbitr' };
+  }
+
+  globalThis.KadItems = { itemsToText, chooseText, cardFrom, ruDate };
 })();

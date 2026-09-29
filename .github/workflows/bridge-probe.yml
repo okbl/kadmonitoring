@@ -1,18 +1,21 @@
-# Проба: возможен ли мост «сайт ↔ вкладка kad» через закладку — без
-# расширения. В журнал — только заголовки безопасности kad, да/нет и числа.
-name: bridge-probe
+# Проба сайта без расширения на настоящей картотеке: страница программы и
+# вкладка kad.arbitr с закладкой «Спор ← kad». В журнал — только числа,
+# стадия и сроки, без имён и текстов.
+name: site-probe
 
 on:
   workflow_dispatch:
   push:
     paths:
       - '.github/workflows/bridge-probe.yml'
-      - 'tools/bridge-feasibility.mjs'
+      - 'tools/site-probe.mjs'
+      - 'src/bridge.js'
+      - 'src/kad-page.js'
 
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -20,5 +23,5 @@ jobs:
           node-version: 22
       - run: npm ci
       - run: npx playwright-core install chromium
-      - name: Мост на настоящей карточке
-        run: node tools/bridge-feasibility.mjs https://kad.arbitr.ru/Card/2aa24115-6d6f-4b9e-9c17-cd43a0bd8ef5 https://okbl.github.io/kadmonitoring/
+      - name: Сайт и закладка на настоящей карточке
+        run: node tools/site-probe.mjs https://kad.arbitr.ru/Card/2aa24115-6d6f-4b9e-9c17-cd43a0bd8ef5 23.06.2026

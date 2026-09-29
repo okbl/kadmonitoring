@@ -7,6 +7,7 @@
  * Страница показывает только первую страницу хронологии — остальное
  * загрузчик должен добрать из API сам.
  */
+import fs from 'fs';
 import http from 'http';
 
 export const CASE = '2aa24115-6d6f-4b9e-9c17-cd43a0bd8ef5';
@@ -43,6 +44,7 @@ function page(items, n) {
 
 const CARD_HTML = `<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>А40-123456/2025 — Картотека</title></head>
 <body>
+<script>window.__kadSporTest = true;</script>
 <h1>А40-123456/2025</h1>
 <div>Дело о несостоятельности (банкротстве) гражданина</div>
 <div>Арбитражный суд города Москвы</div>
@@ -69,11 +71,38 @@ fetch('/Kad/InstanceDocumentsPage?_=' + Date.now() + '&id=inst1&caseId=${CASE}&w
 
 const passed = (req) => /(?:^|;\s*)passed=1/.test(req.headers.cookie || '');
 
-/* Страница проверки браузера: скрипт ставит cookie и уводит дальше. */
+/* Страница проверки браузера перед карточкой: скрипт ставит cookie и уводит дальше. */
 const challenge = (to) => `<!DOCTYPE html><html><body><script>setTimeout(function(){document.cookie='passed=1; path=/';location.href=${JSON.stringify(to)}},300)</script></body></html>`;
 
+/*
+ * Проверка перед PDF — как у kad («salto»): скрытая форма POST с token и
+ * пустым hash, в скрытом поле datat — код, записанный табуляциями и
+ * пробелами (по символу на строку). Код вычисляет hash и отправляет форму;
+ * на POST с верным hash отвечает файл. GET — всегда страница проверки.
+ */
+const SALTO = 'xcd67qm4bns';
+const hashOf = (token) => [...`${token}${SALTO}`].reverse().join('');
+function saltoPage(token) {
+  const code = `document.getElementById('hash').value = (document.getElementById('token').value + document.getElementById('salto').textContent).split('').reverse().join(''); document.getElementById('searchForm').submit();`;
+  const datat = [...code].map((c) => c.charCodeAt(0).toString(2).replace(/1/g, '\t').replace(/0/g, ' ')).join('\n') + '\n';
+  return `<!DOCTYPE html><html><head></head><body>
+<div id="salto" style="display:none">${SALTO}</div>
+<form id="searchForm" style="display:none" method="post">
+<input id="token" type="text" name="token" value="${token}"><input id="hash" type="text" name="hash"><input type="submit" value="Search">
+</form>
+<input id="datat" type="hidden" value="${datat}" />
+<script language="javascript" type="text/javascript">
+function decode(returnCode) { xcode = document.getElementById('datat').value.split("\\n"); result = ''; char_true = '\\t';
+for (i in xcode) { encoded = ''; for (j in xcode[i]) encoded += (xcode[i][j] == char_true) ? "1" : "0"; chr = parseInt(encoded, 2); result += String.fromCharCode(chr.toString(10)); }
+res = result.substr(0, result.length - 1); if (returnCode !== undefined) return res; document.getElementById('source').value = res; }
+eval(decode("ret"))
+</script></body></html>`;
+}
+
+const readBody = (req) => new Promise((ok) => { let b = ''; req.on('data', (c) => { b += c; }); req.on('end', () => ok(b)); });
+
 /**
- * pdf — Buffer с PDF, который отдаётся на любой /Document/Pdf/…;
+ * pdf — Buffer с PDF, который отдаётся на /Document/Pdf/… после проверки;
  * wall — показывать страницу проверки «вы не робот» вместо карточки;
  * cardCheck — карточку отдавать только браузеру, прошедшему проверку
  * (как PDF): без cookie вместо неё страница со скриптом;
@@ -108,17 +137,34 @@ export function startMock({ pdf, wall = false, cardCheck = false, site = '', api
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       return res.end(JSON.stringify(page(ITEMS, +u.searchParams.get('page') || 1)));
     }
-    // Как у настоящей картотеки: без cookie проверки вместо PDF — страница со
-    // скриптом, который ставит cookie и уводит на /Document/Pdf/…?isAddStamp=True.
-    if (/^\/(?:Document\/Pdf|Kad\/PdfDocument)\//.test(u.pathname) && pdf) {
-      // Как у kad: файл — только переходу во вкладке, прошедшей проверку;
-      // прямой запрос (fetch) получает страницу проверки даже с cookie.
-      if (!passed(req) || req.headers['sec-fetch-mode'] !== 'navigate') {
-        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        return res.end(challenge(u.pathname.replace('/Kad/PdfDocument/', '/Document/Pdf/') + '?isAddStamp=True'));
+    // PDF — как у kad: /Kad/PdfDocument/… уводит на /Document/Pdf/…?isAddStamp=True,
+    // там страница проверки «salto»; файл — только на POST с верным hash.
+    if (u.pathname.startsWith('/Kad/PdfDocument/') && pdf) {
+      res.writeHead(302, { Location: u.pathname.replace('/Kad/PdfDocument/', '/Document/Pdf/') + '?isAddStamp=True' });
+      return res.end();
+    }
+    if (u.pathname.startsWith('/Document/Pdf/') && pdf) {
+      if (req.method === 'POST') {
+        return readBody(req).then((b) => {
+          const f = new URLSearchParams(b);
+          if (f.get('hash') && f.get('hash') === hashOf(f.get('token'))) {
+            res.writeHead(200, { 'Content-Type': 'application/pdf', 'Cache-Control': 'no-cache, no-store, must-revalidate' });
+            return res.end(pdf);
+          }
+          res.writeHead(403);
+          res.end();
+        });
       }
-      res.writeHead(200, { 'Content-Type': 'application/pdf' });
-      return res.end(pdf);
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache, no-store, must-revalidate' });
+      return res.end(saltoPage(String(Math.floor(Math.random() * 1e16))));
+    }
+    // Страница программы и pdf.js рядом с ней — как на Pages.
+    if (u.pathname.startsWith('/site/') && site) {
+      const file = { '/site/pdf.min.mjs': 'pdf.min.mjs', '/site/pdf.worker.min.mjs': 'pdf.worker.min.mjs' }[u.pathname];
+      if (file) {
+        res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8' });
+        return res.end(fs.readFileSync(new URL(`../node_modules/pdfjs-dist/build/${file}`, import.meta.url)));
+      }
     }
     if (u.pathname === '/') {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -128,6 +174,7 @@ export function startMock({ pdf, wall = false, cardCheck = false, site = '', api
     res.end();
   });
   return new Promise((resolve) => server.listen(0, '127.0.0.1', () => {
-    resolve({ base: `http://127.0.0.1:${server.address().port}`, hits, setPdf, setSite, close: () => new Promise((r) => server.close(r)) });
+    // Сайт — с другого адреса, чем «картотека»: localhost и 127.0.0.1 — разные источники.
+    resolve({ base: `http://127.0.0.1:${server.address().port}`, siteBase: `http://localhost:${server.address().port}`, hits, setPdf, setSite, close: () => new Promise((r) => server.close(r)) });
   }));
 }

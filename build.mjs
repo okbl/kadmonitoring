@@ -26,8 +26,31 @@ const SCRIPTS = [
   ['CARD', 'kad.js'],
   ['RULES', 'rules.js'],
   ['DISPUTE', 'dispute.js'],
+  ['ITEMS', 'kad-items.js'],
+  ['PDFTEXT', 'pdf-text.js'],
+  ['TRACKER', 'tracker.js'],
   ['APP', 'app.js']
 ];
+
+/*
+ * Код закладки «Спор ← kad» (src/bridge.js с src/kad-page.js внутри), без
+ * комментариев: страница делает из него адрес закладки. Комментарии в этих
+ * файлах — только целыми строками, поэтому убираются построчно; синтаксис
+ * проверяется здесь же.
+ */
+export function bridgeSource() {
+  const strip = (t) => t.split('\n')
+    .filter((l) => !/^\s*(?:\/\/|\/\*|\*)/.test(l))
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .join('\n');
+  const page = strip(fs.readFileSync(src('kad-page.js'), 'utf8'));
+  const code = strip(fs.readFileSync(src('bridge.js'), 'utf8'));
+  if (!code.includes('@@KADPAGE@@') && !/KadPage/.test(code)) throw new Error('src/bridge.js: нет места для kad-page.js');
+  const out = strip(fs.readFileSync(src('bridge.js'), 'utf8').replace('/* @@KADPAGE@@ */', () => page));
+  new Function(`return ${out}`);   // синтаксис
+  return out;
+}
 
 /**
  * Страница. external — скрипты отдельными файлами: страницам расширения
@@ -42,6 +65,10 @@ export function assemble({ external = false } = {}) {
     : '/* Шрифт Onest не скачан (npm run font) — используется системный */';
   // Функция вместо строки замены: в коде и base64 бывают «$&» и «$1».
   html = html.replace('/* @@FONT@@ */', () => font);
+
+  // Код закладки — текстом, не выполняется: страница собирает из него адрес закладки.
+  html = html.replace('<!-- @@BRIDGE@@ -->', () => external ? ''
+    : `<script type="text/plain" id="kadBridgeSrc">\n${bridgeSource().replace(/<\/script/gi, '<\\/script')}\n</script>`);
 
   for (const [mark, file] of SCRIPTS) {
     const slot = `<!-- @@${mark}@@ -->`;
@@ -64,7 +91,9 @@ const EXT_FILES = {
   'rules.js': src('rules.js'),
   'dispute.js': src('dispute.js'),
   'kad-items.js': src('kad-items.js'),
+  'kad-page.js': src('kad-page.js'),
   'pdf-text.js': src('pdf-text.js'),
+  'tracker.js': src('tracker.js'),
   'app.js': src('app.js'),
   'pdf.min.mjs': path.join(root, 'node_modules', 'pdfjs-dist', 'build', 'pdf.min.mjs'),
   'pdf.worker.min.mjs': path.join(root, 'node_modules', 'pdfjs-dist', 'build', 'pdf.worker.min.mjs'),

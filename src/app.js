@@ -1,13 +1,13 @@
 /*
  * Логика страницы. Наружу ничего не выставляет.
  *
- * Режимов три. Страница без хранилища (файл с диска, GitHub Pages) работает
- * только со вставкой и хранит спор в скачанном файле. Страница расширения
- * браузера и страница локального сервера (server.mjs) вдобавок загружают
- * карточку по ссылке, тексты определений из PDF и держат список
- * отслеживаемых споров — на устройстве пользователя, не где-то ещё.
- * Разбор, правила и сроки в обоих режимах одни и те же и считаются здесь,
- * в браузере; сервер только приносит данные и хранит их.
+ * Режимы. Сайт (GitHub Pages) загружает карточки через вкладку kad.arbitr
+ * с нажатой закладкой «Спор ← kad» и хранит отслеживаемые споры в IndexedDB
+ * этого браузера — ничего не устанавливается. Страница расширения браузера
+ * и страница локального сервера (server.mjs) загружают карточки сами. Файл
+ * с диска работает только со вставкой. Разбор, правила и сроки во всех
+ * режимах одни и те же и считаются здесь, в браузере; данные споров — только
+ * на устройстве пользователя, не где-то ещё.
  */
 (function () {
   'use strict';
@@ -300,6 +300,7 @@
     const bits = [m.caseNo && `Дело ${m.caseNo}`, m.debtor && `должник ${m.debtor}`, m.court].filter(Boolean);
     $('caseLine').textContent = bits.length ? bits.join(' · ') : 'оспаривание сделки должника — движение по карточке kad.arbitr';
     document.title = m.caseNo ? `${m.caseNo} — обособленный спор` : 'Обособленный спор — движение оспаривания сделки должника';
+    titleCount();
 
     reportParse(d);
     renderTiles(d);
@@ -685,20 +686,248 @@
     async save(st) { return (await this.send({ type: 'save', state: st })).id; },
     remove(id) { return this.send({ type: 'remove', id }); },
     refresh(id) { return this.send({ type: 'check', id }); },
+    async setSettings(patch) { this.settings = await this.send({ type: 'settings', set: patch }); return this.settings; },
     note() {
       const h = this.settings && this.settings.checkHours;
       return h ? `карточки проверяются каждые ${h} ч, пока открыт браузер` : 'плановая проверка выключена';
     }
   };
 
+  /* ---------- сайт без расширения: вкладка kad.arbitr и закладка ---------- */
+
+  /*
+   * Сам сайт читать kad.arbitr не может — это запрещает браузер. Поэтому
+   * карточки загружает вкладка kad.arbitr, в которой нажата закладка
+   * «Спор ← kad» (src/bridge.js): сайт шлёт ей запросы, она выполняет их
+   * обычными запросами страницы картотеки и отвечает. Всё — внутри этого
+   * браузера; споры хранятся в его IndexedDB.
+   */
+  const KAD_ORIGIN = globalThis.KAD_TEST_ORIGIN || 'https://kad.arbitr.ru';
+
+  const Bridge = {
+    win: null,
+    last: 0,
+    shown: null,
+    seq: 0,
+    wait: new Map(),
+    waiters: [],
+    get ready() {
+      try { return !!this.win && !this.win.closed && Date.now() - this.last < 7000; } catch (_) { return false; }
+    },
+    listen() {
+      addEventListener('message', (e) => {
+        const m = e.data;
+        if (e.origin !== KAD_ORIGIN || !m || m.kadspor !== 1) return;
+        if (m.type === 'hello') {
+          const was = this.ready;
+          this.win = e.source;
+          this.last = Date.now();
+          if (!was) { bridgeChanged(); this.waiters.splice(0).forEach((f) => f()); }
+        } else if (m.type === 'result') {
+          const w = this.wait.get(m.re);
+          if (!w) return;
+          this.wait.delete(m.re);
+          if (m.ok) w.resolve(m.data); else w.reject(new Error(m.error || 'вкладка kad.arbitr не выполнила запрос'));
+        }
+      });
+      // Вкладку закрыли или ушли с неё — приветствия прекратились.
+      setInterval(() => { if (this.shown !== this.ready) bridgeChanged(); }, 1000);
+    },
+    /* Открыть вкладку картотеки (по нажатию или вставке — иначе браузер не даст). */
+    open(url) {
+      const w = window.open(url || `${KAD_ORIGIN}/`, 'kadbridge');
+      if (w) this.win = w;
+      return !!w;
+    },
+    connected() {
+      return this.ready ? Promise.resolve() : new Promise((ok) => this.waiters.push(ok));
+    },
+    call(type, payload, ms = 240000) {
+      if (!this.ready) return Promise.reject(new Error('нет связи с вкладкой kad.arbitr'));
+      const id = ++this.seq;
+      return new Promise((resolve, reject) => {
+        this.wait.set(id, { resolve, reject });
+        this.win.postMessage({ kadspor: 1, type, id, ...payload }, KAD_ORIGIN);
+        setTimeout(() => { if (this.wait.delete(id)) reject(new Error('вкладка kad.arbitr не ответила вовремя')); }, ms);
+      });
+    }
+  };
+
+  /* Адрес закладки: код для страницы картотеки (собран build.mjs) и адрес этого сайта. */
+  function bookmarklet() {
+    const src = $('kadBridgeSrc') ? $('kadBridgeSrc').textContent.trim() : '';
+    if (!src) return '';
+    const app = location.href.replace(/[?#].*$/, '');
+    return 'javascript:' + encodeURIComponent(`void (${src})(${JSON.stringify(location.origin)},${JSON.stringify(app)})`);
+  }
+
+  /* Хранилище споров сайта: IndexedDB этого браузера — ключ → значение. */
+  function idbStore() {
+    const db = new Promise((ok, fail) => {
+      const r = indexedDB.open('kadmonitoring', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('kv');
+      r.onsuccess = () => ok(r.result);
+      r.onerror = () => fail(r.error);
+    });
+    const tx = async (mode, fn) => {
+      const d = await db;
+      return new Promise((ok, fail) => {
+        const t = d.transaction('kv', mode);
+        const req = fn(t.objectStore('kv'));
+        t.oncomplete = () => ok(req.result);
+        t.onerror = () => fail(t.error);
+        t.onabort = () => fail(t.error);
+      });
+    };
+    return {
+      get: (k) => tx('readonly', (st) => st.get(k)),
+      set: (k, v) => tx('readwrite', (st) => st.put(v, k)).then(() => {}),
+      remove: (k) => tx('readwrite', (st) => st.delete(k)).then(() => {})
+    };
+  }
+
+  /* pdf.js — отдельными файлами рядом со страницей, загружается, когда понадобится текст определения. */
+  let pdfjs = null;
+  async function pdfLib() {
+    if (!pdfjs) {
+      pdfjs = await import(new URL('pdf.min.mjs', location.href).href);
+      pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdf.worker.min.mjs', location.href).href;
+    }
+    return pdfjs.getDocument;
+  }
+
+  const Local = {
+    kind: 'local',
+    settings: null,
+    tracker: null,
+    async init() {
+      if (!/^https?:$/.test(location.protocol) || !globalThis.indexedDB || !$('kadBridgeSrc')) return null;
+      this.tracker = globalThis.KadTracker.create({
+        store: idbStore(),
+        card: (url) => this.card(url),
+        pdf: (url) => this.pdf(url)
+      });
+      this.settings = await this.tracker.settings();
+      if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+      Bridge.listen();
+      return this;
+    },
+    async card(url) {
+      const m = url.match(KAD_URL);
+      if (!m) throw new Error('нужна ссылка вида https://kad.arbitr.ru/Card/…');
+      await needBridge(`${KAD_ORIGIN}/Card/${m[1]}`);
+      const r = await Bridge.call('card', { caseId: m[1] });
+      const items = r.items || [];
+      return globalThis.KadItems.cardFrom({
+        pageText: C.htmlToText(r.html || ''),
+        apiText: items.length ? globalThis.KadItems.itemsToText(items, m[1]) : '',
+        apiItems: items.length,
+        pages: r.pages
+      }, `https://kad.arbitr.ru/Card/${m[1]}`);
+    },
+    async pdf(url) {
+      if (!Bridge.ready) throw new Error('нет связи с вкладкой kad.arbitr');
+      const path = url.replace(/^https?:\/\/(?:www\.)?kad\.arbitr\.ru/i, '');
+      const buf = await Bridge.call('pdf', { url: path });
+      return globalThis.KadPdf.text(await pdfLib(), new Uint8Array(buf));
+    },
+    list() { return this.tracker.list(); },
+    async get(id) {
+      const st = await this.tracker.load(id);
+      if (!st) throw new Error('нет такого спора');
+      return st;
+    },
+    save(st) { return this.tracker.save(st); },
+    remove(id) { return this.tracker.remove(id); },
+    async refresh(id) {
+      const r = await this.tracker.check(id);
+      if (r.fresh.length) announce(r.st, r.a, r.fresh);
+      return { fresh: r.fresh.length };
+    },
+    async setSettings(patch) { this.settings = await this.tracker.settings(patch); return this.settings; },
+    note() {
+      const h = this.settings && this.settings.checkHours;
+      return h ? `карточки проверяются каждые ${h} ч, пока открыты этот сайт и вкладка kad.arbitr с закладкой` : 'плановая проверка выключена';
+    }
+  };
+
+  /*
+   * Нет связи с вкладкой картотеки — открыть её на нужной карточке и ждать,
+   * пока в ней нажмут закладку.
+   */
+  async function needBridge(url) {
+    if (Bridge.ready) return;
+    const opened = Bridge.open(url);
+    document.body.classList.add('waitkad');
+    echo('pasteEcho', opened
+      ? 'Открыта вкладка kad.arbitr — нажмите в ней закладку «Спор ← kad». Загрузка продолжится сама.'
+      : 'Нажмите «Открыть kad.arbitr» и в открывшейся вкладке — закладку «Спор ← kad». Загрузка продолжится сама.');
+    $('install').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    await Bridge.connected();
+    document.body.classList.remove('waitkad');
+  }
+
+  function bridgeChanged() {
+    const on = Bridge.ready;
+    Bridge.shown = on;
+    document.body.classList.toggle('linked', on);
+    $('kadState').textContent = on ? 'kad.arbitr: связь есть' : 'kad.arbitr: нет связи';
+    $('kadState').classList.toggle('on', on);
+  }
+
+  /* Новые документы: уведомление браузера (если разрешено) и число в заголовке вкладки. */
+  function announce(st, a, fresh) {
+    const s = a.summary;
+    if (backend && backend.settings && backend.settings.notify && globalThis.Notification && Notification.permission === 'granted') {
+      try {
+        new Notification(`${s.caseNo || 'Спор'}: ${fresh.length} ${D.plural(fresh.length, 'новый документ', 'новых документа', 'новых документов')}`,
+          { body: fresh.slice(0, 3).map((e) => `${D.fmt(e.rec.date)} — ${e.cls.doc}`).join('\n'), tag: `d:${st.id}` });
+      } catch (_) { /* уведомления недоступны */ }
+    }
+  }
+
+  async function titleCount() {
+    if (!backend || backend.kind !== 'local') return;
+    const n = await backend.tracker.withNew().catch(() => 0);
+    document.title = `${n ? `(${n}) ` : ''}${document.title.replace(/^\(\d+\) /, '')}`;
+  }
+
+  /* Плановая проверка — пока открыт сайт и есть связь с вкладкой картотеки. */
+  let planned = false;
+  async function plannedCheck() {
+    if (planned || !backend || backend.kind !== 'local' || !Bridge.ready) return;
+    const h = backend.settings && backend.settings.checkHours;
+    if (!h) return;
+    planned = true;
+    try {
+      for (const it of await backend.list()) {
+        if (!Bridge.ready) break;
+        const at = it.checkedAt ? Date.parse(it.checkedAt) : 0;
+        if (Date.now() - at < h * 3600000) continue;
+        try { await backend.refresh(it.id); } catch (_) { /* ошибка записана в спор */ }
+        await new Promise((ok) => setTimeout(ok, 5000));
+      }
+    } finally {
+      planned = false;
+      titleCount();
+      if (!$('listSec').hidden) showList();
+    }
+  }
+
   let backend = null;
 
   $('btnFetch').addEventListener('click', () => {
     if (backend) { fetchCard(); return; }
-    $('install').scrollIntoView({ behavior: 'smooth', block: 'center' });
-    $('install').classList.add('flash');
-    setTimeout(() => $('install').classList.remove('flash'), 1600);
-    toast('Загружать карточки по ссылке умеет расширение для браузера — установите его, это один раз');
+    toast('Загрузка по ссылке работает на сайте программы: okbl.github.io/kadmonitoring');
+  });
+
+  $('btnKad').addEventListener('click', () => {
+    const m = S.url.match(KAD_URL);
+    if (!Bridge.open(m ? `${KAD_ORIGIN}/Card/${m[1]}` : '')) toast('Браузер не дал открыть вкладку — разрешите всплывающие окна для этого сайта');
+  });
+  $('bookmarklet').addEventListener('click', (e) => {
+    e.preventDefault();
+    toast('Перетащите эту кнопку на панель закладок, а нажимайте её во вкладке kad.arbitr');
   });
 
   /*
@@ -744,7 +973,7 @@
   /** Тексты судебных актов спора, которых ещё нет, — по одному, чтобы не частить. */
   async function loadActs() {
     if (!backend || !dispute) return;
-    if (backend.kind === 'ext' && !(backend.settings && backend.settings.pdfTexts)) return;
+    if (backend.settings && backend.settings.pdfTexts === false) return;
     const mine = S;
     const todo = dispute.events.filter((e) => isAct(e) && e.rec.pdf && !S.texts[e.rec.id]);
     let n = 0;
@@ -888,6 +1117,7 @@
     $('list').innerHTML = '<div class="note">Загружаю список…</div>';
     try {
       renderList(await backend.list());
+      titleCount();
     } catch (err) {
       $('list').innerHTML = `<div class="note warn">Список не загружен: ${esc(err.message)}</div>`;
     }
@@ -992,19 +1222,24 @@
   /* ---------- настройки расширения ---------- */
 
   function renderSettings() {
-    if (!backend || backend.kind !== 'ext') return;
+    if (!backend || !backend.settings) return;
     const st = backend.settings || {};
     $('setHours').value = String(st.checkHours || 0);
     $('setNotify').checked = !!st.notify;
     $('setPdf').checked = !!st.pdfTexts;
   }
   async function saveSettings(patch) {
-    backend.settings = await backend.send({ type: 'settings', set: patch });
+    await backend.setSettings(patch);
     renderSettings();
     $('listNote').textContent = backend.note();
   }
   $('setHours').addEventListener('change', (e) => saveSettings({ checkHours: +e.target.value }));
-  $('setNotify').addEventListener('change', (e) => saveSettings({ notify: e.target.checked }));
+  $('setNotify').addEventListener('change', async (e) => {
+    // На сайте уведомления показывает браузер — по его разрешению.
+    if (e.target.checked && backend.kind === 'local' && globalThis.Notification && Notification.permission === 'default')
+      await Notification.requestPermission().catch(() => {});
+    saveSettings({ notify: e.target.checked });
+  });
   $('setPdf').addEventListener('change', (e) => saveSettings({ pdfTexts: e.target.checked }));
 
   /* ---------- прочее ---------- */
@@ -1022,11 +1257,21 @@
   window.addEventListener('afterprint', () => { printOpen.forEach((d) => { d.open = false; }); printOpen = []; });
 
   async function init() {
-    backend = await Ext.init().catch(() => null) || await Http.init().catch(() => null);
+    backend = await Ext.init().catch(() => null) || await Http.init().catch(() => null) || await Local.init().catch(() => null);
+    const kind = backend ? backend.kind : 'off';
     document.body.classList.toggle('server', !!backend);
-    document.body.classList.toggle('ext', !!backend && backend.kind === 'ext');
+    document.body.classList.toggle('ext', kind === 'ext');
+    document.body.classList.toggle('http', kind === 'server');
+    document.body.classList.toggle('local', kind === 'local');
+    document.body.classList.toggle('trk', kind === 'ext' || kind === 'local');
     readUrl();
     if (!backend) return;
+    if (kind === 'local') {
+      $('bookmarklet').href = bookmarklet();
+      bridgeChanged();
+      setInterval(plannedCheck, 60000);
+      titleCount();
+    }
     renderSettings();
     const m = location.hash.match(/^#d=([\w-]+)$/);
     if (m) openTracked(m[1]);
