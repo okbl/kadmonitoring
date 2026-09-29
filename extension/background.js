@@ -144,15 +144,11 @@ async function inTab(tabId, func, args = [], ms = 30000) {
   return res && res[0] ? res[0].result : null;
 }
 
-/* Инстанции дела в разметке карточки: скрытые поля js-instanceId и заголовки хронологии. */
+/* Инстанции дела в разметке карточки: скрытые поля js-instanceId. */
 function instancesIn(html) {
   const ids = new Set();
   for (const m of html.matchAll(/<input\b[^>]*\bjs-instanceId\b[^>]*>/gi)) {
     const v = m[0].match(/\bvalue\s*=\s*["']([^"']+)["']/i);
-    if (v) ids.add(v[1]);
-  }
-  for (const m of html.matchAll(/<[a-z]+\b[^>]*\bchrono-item-header\b[^>]*>/gi)) {
-    const v = m[0].match(/\bdata-id\s*=\s*["']([^"']+)["']/i);
     if (v) ids.add(v[1]);
   }
   return [...ids];
@@ -195,31 +191,40 @@ function pageState() {
 async function collectInPage(caseId, instances, base = '') {
   const items = [];
   const pages = [];
+  const fails = [];
   for (const id of instances) {
     let count = 0;
     for (let page = 1; page <= 200; page++) {
       const url = `${base}/Kad/InstanceDocumentsPage?_=${Date.now()}&id=${encodeURIComponent(id)}&caseId=${encodeURIComponent(caseId)}&perPage=30&page=${page}`;
       let j = null;
+      let why = null;
       try {
         const r = await fetch(url, { credentials: 'include', headers: { 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json, text/javascript, */*; q=0.01' } });
-        if (r.ok) j = await r.json();
-      } catch (_) { j = null; }
+        const body = await r.text();
+        try { j = JSON.parse(body); } catch (_) { j = null; }
+        if (!(j && j.Result && j.Result.Items && j.Result.Items.length)) {
+          // Ответ без записей: страница проверки или ошибка — содержания дела в нём нет.
+          why = { status: r.status, type: r.headers.get('content-type'), len: body.length,
+            sample: j && j.Result && j.Result.Items ? 'пустой список' : body.replace(/\s+/g, ' ').slice(0, 160) };
+        }
+      } catch (e) { why = { error: String(e && e.message || e) }; }
       const res = j && j.Result;
       const list = (res && res.Items) || [];
       items.push(...list);
+      if (why && page === 1) fails.push(why);
       if (list.length) count = page;
       if (!list.length || page >= ((res && res.PagesCount) || 1)) break;
       await new Promise((ok) => setTimeout(ok, 300));
     }
     pages.push(count);
   }
-  if (typeof document === 'undefined') return { items, pages, pageText: '' };
+  if (typeof document === 'undefined') return { items, pages, fails, pageText: '' };
   for (const a of document.querySelectorAll('a[href*="/PdfDocument/"], a[href*="/Document/Pdf/"]')) {
     const div = document.createElement('div');
     div.textContent = 'PDF: ' + a.href;
     a.after(div);
   }
-  return { items, pages, pageText: document.body ? document.body.innerText : '' };
+  return { items, pages, fails, pageText: document.body ? document.body.innerText : '' };
 }
 
 /*
@@ -240,12 +245,44 @@ async function collectDirect(url, caseId) {
   const instances = instancesIn(html);
   trace('direct', { status: r.status, htmlLen: html.length, instances: instances.length });
   if (!instances.length) return null;
-  const got = await collectInPage(caseId, instances, BASE);
-  trace('direct-api', { items: got.items.length, pages: got.pages });
+  let got = await collectInPage(caseId, instances, BASE);
+  trace('direct-api', { items: got.items.length, pages: got.pages, fails: got.fails });
+  if (!got.items.length) {
+    // Запрос из фоновой части отличается от запроса со страницы карточки
+    // заголовками Referer и Origin — повтор с такими же, как у страницы.
+    await pageHeaders(toBase(url));
+    try {
+      got = await collectInPage(caseId, instances, BASE);
+    } finally {
+      await pageHeaders(null);
+    }
+    trace('direct-api-referer', { items: got.items.length, pages: got.pages, fails: got.fails });
+  }
   if (!got.items.length) return null;
   let pageText = C.htmlToText(html);
   if (BASE !== KAD) pageText = pageText.split(BASE).join(KAD);
   return { pageText, apiText: I.itemsToText(got.items, caseId), apiItems: got.items.length, pages: got.pages };
+}
+
+/*
+ * Запросам фоновой части к API картотеки — заголовки страницы карточки:
+ * Referer — сама карточка, Origin — картотека. Правило сессии действует
+ * только на запросы не из вкладок, то есть самого расширения; null — снять.
+ */
+async function pageHeaders(cardUrl) {
+  const rule = cardUrl && {
+    id: 1,
+    priority: 1,
+    action: {
+      type: 'modifyHeaders',
+      requestHeaders: [
+        { header: 'Referer', operation: 'set', value: cardUrl },
+        { header: 'Origin', operation: 'remove' }
+      ]
+    },
+    condition: { urlFilter: `|${BASE}/Kad/`, tabIds: [chrome.tabs.TAB_ID_NONE] }
+  };
+  await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: [1], addRules: rule ? [rule] : [] });
 }
 
 /* Вкладка: карточку открывает браузер, как открыл бы человек, — со всеми проверками картотеки. */
@@ -274,7 +311,7 @@ async function collectInTab(url, caseId) {
         : 'страница карточки не открылась — kad.arbitr не отвечает или недоступен');
     }
     const r = await inTab(tab.id, collectInPage, [caseId, state.instances], 180000);
-    trace('tab-api', { items: r && r.items ? r.items.length : 0, pages: r && r.pages });
+    trace('tab-api', { items: r && r.items ? r.items.length : 0, pages: r && r.pages, fails: r && r.fails });
     let pageText = (r && r.pageText) || '';
     if (BASE !== KAD) pageText = pageText.split(BASE).join(KAD);
     const items = (r && r.items) || [];

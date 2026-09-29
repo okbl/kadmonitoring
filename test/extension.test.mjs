@@ -41,8 +41,9 @@ test('расширение: только ссылка и дата — карто
   if (!exe || !pw) { t.skip('нет Chromium для расширений'); return; }
 
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'kad-ext-'));
-  // Карточку макет отдаёт только браузеру, прошедшему проверку, — как kad.
-  const mock = await startMock({ cardCheck: true, site: assemble() });
+  // Карточку макет отдаёт только браузеру, прошедшему проверку, а API —
+  // только запросам с Referer карточки.
+  const mock = await startMock({ cardCheck: true, apiReferer: true, site: assemble() });
   const dir = path.join(tmp, 'ext');
   writeDir(dir, extensionFiles({ base: mock.base, site: mock.base }));
   const ctx = await pw.chromium.launchPersistentContext(path.join(tmp, 'profile'), {
@@ -102,12 +103,13 @@ test('расширение: только ссылка и дата — карто
   assert.equal(await page.isChecked('#setPdf'), true);
 
   // Новый документ в карточке и проверка по кнопке. Проверку картотеки
-  // вкладка уже прошла — теперь карточка берётся без вкладки.
+  // вкладка уже прошла — теперь карточка берётся без вкладки: API — с
+  // заголовками страницы карточки.
   ITEMS.push({ ...ITEMS[ITEMS.length - 1], Id: '00000000-0000-4000-8000-000000000099', DisplayDate: '25.09.2026',
     ContentTypes: ['Об отложении судебного разбирательства'], HearingDate: null });
   await page.click('[data-check]');
   await page.waitForFunction(() => /новое: 1/.test(document.getElementById('list').textContent), null, { timeout: 180000 });
-  assert.deepEqual(await steps(), ['direct', 'direct-api']);
+  assert.deepEqual(await steps(), ['direct', 'direct-api', 'direct-api-referer']);
 
   const after = await sw.evaluate(() => chrome.storage.local.get(null));
   const st2 = after[`d:${after.ids[0]}`];

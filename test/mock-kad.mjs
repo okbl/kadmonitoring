@@ -77,9 +77,10 @@ const challenge = (to) => `<!DOCTYPE html><html><body><script>setTimeout(functio
  * wall — показывать страницу проверки «вы не робот» вместо карточки;
  * cardCheck — карточку отдавать только браузеру, прошедшему проверку
  * (как PDF): без cookie вместо неё страница со скриптом;
- * site — страница программы, отдаётся по /site/ (как с сайта на Pages).
+ * site — страница программы, отдаётся по /site/ (как с сайта на Pages);
+ * apiReferer — API отвечает только запросам со страницы карточки (Referer).
  */
-export function startMock({ pdf, wall = false, cardCheck = false, site = '' } = {}) {
+export function startMock({ pdf, wall = false, cardCheck = false, site = '', apiReferer = false } = {}) {
   const hits = [];
   const setPdf = (b) => { pdf = b; };
   const setSite = (html) => { site = html; };
@@ -100,6 +101,10 @@ export function startMock({ pdf, wall = false, cardCheck = false, site = '' } = 
     }
     if (u.pathname === '/Kad/InstanceDocumentsPage') {
       if (req.headers['x-requested-with'] !== 'XMLHttpRequest') { res.writeHead(451); return res.end(); }
+      if (apiReferer && !/\/Card\//.test(req.headers.referer || '')) {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        return res.end(JSON.stringify({ Success: false, Message: 'нет доступа' }));
+      }
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       return res.end(JSON.stringify(page(ITEMS, +u.searchParams.get('page') || 1)));
     }

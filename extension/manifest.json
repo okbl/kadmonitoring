@@ -27,7 +27,8 @@
     "alarms",
     "notifications",
     "scripting",
-    "debugger"
+    "debugger",
+    "declarativeNetRequestWithHostAccess"
   ],
   "host_permissions": [
     "https://kad.arbitr.ru/*"
