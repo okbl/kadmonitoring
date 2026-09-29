@@ -32,7 +32,9 @@ const site = `http://127.0.0.1:${server.address().port}/`;
 
 const t0 = Date.now();
 const sec = () => `${((Date.now() - t0) / 1000).toFixed(0)} с`;
-const exe = process.env.KAD_CHROMIUM ? { executablePath: process.env.KAD_CHROMIUM } : {};
+// Облегчённый Chromium Headless Shell картотека встречает проверкой «вы не
+// робот» — у пользователя обычный браузер, поэтому здесь полный Chromium.
+const exe = process.env.KAD_CHROMIUM ? { executablePath: process.env.KAD_CHROMIUM } : { channel: 'chromium' };
 const browser = await chromium.launch({ headless: true, ...exe, ignoreDefaultArgs: ['--enable-automation'], args: ['--disable-blink-features=AutomationControlled'] });
 const tmp = await browser.newPage();
 const ua = (await tmp.evaluate(() => navigator.userAgent)).replace(/HeadlessChrome/g, 'Chrome');
