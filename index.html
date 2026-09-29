@@ -209,13 +209,22 @@ dialog::backdrop{background:rgba(43,45,49,.42)}
 footer{padding:34px 0 46px;font-size:12px;color:var(--ink-3);line-height:1.6}
 footer b{color:var(--ink-2)}
 
-/* ---------- два режима: без сервера (файл, GitHub Pages) и локальный сервер ---------- */
+/* ---------- режимы: srv — есть хранилище споров (сайт, расширение, сервер); off — файл с диска;
+   local — сайт с закладкой; ext — расширение; http — программа-сервер; trk — настройки проверки ---------- */
 body:not(.server) .srv{display:none!important}
 body.server .off{display:none!important}
-/* облако: споры проверяет GitHub Actions, страница только показывает */
-/* расширение браузера: споры в хранилище этого браузера */
 body:not(.ext) .ext{display:none!important}
-body.ext .noext{display:none!important}
+body:not(.local) .local{display:none!important}
+body:not(.http) .http{display:none!important}
+body:not(.trk) .trk{display:none!important}
+body.linked .unlinked{display:none!important}
+.kadstate{font-size:12px;color:var(--ink-3);display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.kadstate::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--line-2)}
+.kadstate.on{color:var(--ink-2)}
+.kadstate.on::before{background:#3f7d4e}
+a.bm{display:inline-block;padding:3px 10px;border-radius:7px;background:var(--acc);color:#fff;font-weight:600;
+  text-decoration:none;cursor:grab;white-space:nowrap}
+body.waitkad #install{border-color:var(--acc);box-shadow:0 0 0 4px var(--acc-wash)}
 .settings{display:flex;gap:16px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:var(--ink-2);
   background:var(--surface);border:1px solid var(--line);border-radius:var(--r-sm);padding:9px 14px;margin-bottom:12px}
 .settings label{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
@@ -289,6 +298,7 @@ a.btn{text-decoration:none;display:inline-block}
       <div class="who" id="caseLine">оспаривание сделки должника — движение по карточке kad.arbitr</div>
     </div>
     <div class="act">
+      <span class="kadstate local" id="kadState">kad.arbitr: нет связи</span>
       <button class="btn srv" id="btnList">Мои споры</button>
       <button class="btn" id="btnHelp">Инструкция</button>
       <button class="btn off" id="btnOpen">Открыть спор</button>
@@ -307,7 +317,7 @@ a.btn{text-decoration:none;display:inline-block}
       <button class="btn btn-sm" id="btnCheckAll">Проверить все</button>
       <button class="btn btn-sm pri" id="btnNew">Новый спор</button>
     </div>
-    <div class="settings ext">
+    <div class="settings trk">
       <label>Проверять карточки
         <select id="setHours">
           <option value="1">каждый час</option>
@@ -353,33 +363,43 @@ a.btn{text-decoration:none;display:inline-block}
     </div>
 
     <div class="echo status" id="pasteEcho"></div>
+    <p class="hint local">Карточку загружает вкладка kad.arbitr с нажатой закладкой — все страницы хронологии
+    и все инстанции. Отслеживаемые споры хранятся <b>только в этом браузере</b> и никуда не отправляются.</p>
     <p class="hint ext">Карточку загружает расширение в этом браузере — все страницы хронологии и все
     инстанции. Отслеживаемые споры хранятся <b>только в этом браузере</b> и никуда не отправляются;
     расширение обращается только к kad.arbitr.ru.</p>
-    <p class="hint srv noext">Карточку загружает программа, запущенная на этом компьютере: она открывает
+    <p class="hint http">Карточку загружает программа, запущенная на этом компьютере: она открывает
     ссылку в браузере без окна, как открыли бы вы, и забирает хронологию дела и тексты определений.
     Отслеживаемые споры хранятся здесь же, в папке <b>data</b>, и перепроверяются по расписанию.</p>
-    <div class="install off" id="install">
+    <div class="install local unlinked" id="install">
       <div>
-        <h3>Загрузка по ссылке — через расширение для браузера</h3>
-        <p>Сам сайт обращаться к kad.arbitr не может — это запрещает браузер. Поставьте расширение
-        «Обособленный спор» (один раз, около минуты) и обновите эту страницу. Дальше достаточно
-        ссылки и даты: карточка загрузится сама — все страницы хронологии и все инстанции, —
-        а отслеживаемые споры будут проверяться по расписанию. Список споров у каждого свой и
-        хранится <b>только в его браузере</b>. Chrome, Edge, Яндекс Браузер.</p>
+        <h3>Связь с kad.arbitr — закладка «Спор ← kad»</h3>
+        <p>Сам сайт читать kad.arbitr не может — это запрещает браузер. Карточки для него загружает
+        вкладка kad.arbitr, в которой нажата закладка «Спор ← kad». Ничего не устанавливается: это
+        обычная закладка браузера, прав администратора не нужно.</p>
         <ol>
-          <li>Скачайте архив и распакуйте его в папку, которую не будете удалять.</li>
-          <li>Откройте страницу расширений: <code>chrome://extensions</code>, в Edge — <code>edge://extensions</code>,
-            в Яндекс Браузере — <code>browser://extensions</code>.</li>
-          <li>Включите «Режим разработчика» и нажмите «Загрузить распакованное расширение».</li>
-          <li>Выберите распакованную папку <b>kad-spor-extension</b> и обновите эту страницу.</li>
+          <li>Один раз: перетащите кнопку <a class="bm" id="bookmarklet" href="#" title="Перетащите на панель закладок">Спор ← kad</a>
+            на панель закладок. Панели не видно — Ctrl+Shift+B.</li>
+          <li>Нажмите «Открыть kad.arbitr» — или просто вставьте ссылку на карточку, вкладка откроется сама.</li>
+          <li>В вкладке kad.arbitr нажмите закладку. Вкладка свяжется с сайтом — не закрывайте её,
+            пока работаете: через неё загружаются карточки и тексты определений.</li>
         </ol>
+        <p class="hint">Закладка берёт данные у kad.arbitr прямо в вашем браузере и передаёт их этой странице.
+        Споры хранятся <b>только в этом браузере</b> и никуда не отправляются.</p>
       </div>
-      <a class="btn pri" href="kad-spor-extension.zip" download>Скачать расширение</a>
+      <button class="btn pri" id="btnKad" type="button">Открыть kad.arbitr</button>
+    </div>
+    <div class="install off">
+      <div>
+        <h3>Загрузка по ссылке — на сайте программы</h3>
+        <p>Эта копия страницы открыта файлом с диска и загружать карточки не может. Откройте программу
+        на сайте <a href="https://okbl.github.io/kadmonitoring/">okbl.github.io/kadmonitoring</a>: там
+        достаточно ссылки и даты, а споры хранятся в вашем браузере.</p>
+      </div>
     </div>
 
     <details class="adv" id="manual">
-      <summary><span class="caret"></span><span class="srv">Загрузка не удалась? Вставить страницу карточки вручную</span><span class="off">Без расширения: вставить страницу карточки вручную</span></summary>
+      <summary><span class="caret"></span><span class="srv">Вставить страницу карточки вручную</span><span class="off">Без расширения: вставить страницу карточки вручную</span></summary>
       <div class="drop" id="drop">
         <textarea id="paste" aria-label="Страница карточки" placeholder="Откройте карточку дела на kad.arbitr.ru, выделите страницу (Ctrl+A), скопируйте (Ctrl+C) и вставьте сюда (Ctrl+V). Либо перетащите в это поле сохранённую страницу — .html или .mhtml. Если хронология на нескольких страницах, вставьте их одну за другой."></textarea>
         <div class="row">
@@ -472,7 +492,13 @@ a.btn{text-decoration:none;display:inline-block}
   обращается только к kad.arbitr.ru — за карточками дел и текстами определений. У каждого
   пользователя свой список. Чтобы перенести споры на другой компьютер, скачайте их файлом и
   загрузите там. В файле персональные данные участников дела — храните его там же, где материалы дела.</p>
-  <p class="srv noext"><b>Где данные.</b> Разбор, правила и расчёт сроков работают в браузере; в сеть
+  <p class="local"><b>Где данные.</b> Отслеживаемые споры, загруженные карточки и тексты определений
+  хранятся только в этом браузере (IndexedDB сайта). Они никуда не отправляются: карточки и тексты
+  определений берёт у kad.arbitr вкладка с закладкой «Спор ← kad» и передаёт этой странице внутри
+  браузера. У каждого пользователя свой список. Чтобы перенести споры на другой компьютер, скачайте
+  их файлом и загрузите там; очистка данных браузера удаляет и споры. В файле персональные данные
+  участников дела — храните его там же, где материалы дела.</p>
+  <p class="http"><b>Где данные.</b> Разбор, правила и расчёт сроков работают в браузере; в сеть
   обращается только программа-сервер на этом компьютере, и только к kad.arbitr.ru — за карточкой
   дела и текстами определений. Споры хранятся в папке <b>data</b> рядом с программой и содержат
   персональные данные участников дела.</p>
@@ -496,20 +522,19 @@ a.btn{text-decoration:none;display:inline-block}
       все страницы хронологии (картотека показывает по 30 документов на странице) и все
       инстанции. Когда есть и ссылка, и дата, спор сразу встаёт на отслеживание.</li>
   </ul>
-  <p><b>Загрузку делает расширение браузера</b> «Обособленный спор» (или программа, запущенная на
-  компьютере как сервер, см. README). Сайт сам этого не может: kad.arbitr не разрешает другим сайтам
-  читать свои страницы. Поэтому расширение ставится один раз, а дальше эта же страница — на сайте
-  или по значку расширения — работает через него. Расширение запрашивает карточку и её хронологию
-  у kad.arbitr из вашего браузера; если картотека требует проверки, открывает карточку во вкладке,
-  как открыли бы вы. Если kad.arbitr попросит пройти проверку «вы не робот», расширение покажет
-  вкладку картотеки: пройдите проверку и загрузите карточку ещё раз.</p>
-  <p><b>Без расширения</b> остаётся ручной путь: «Вставить страницу карточки вручную» — Ctrl+A,
-  Ctrl+C на странице карточки и Ctrl+V в поле; можно перетащить сохранённую страницу (.html, .mhtml).</p>
-  <p class="noext"><b>Установка расширения.</b> Скачайте архив («Скачать расширение» на этой
-  странице) и распакуйте его. В браузере откройте <code>chrome://extensions</code> (в Яндекс Браузере —
-  <code>browser://extensions</code>, в Edge — <code>edge://extensions</code>), включите «Режим
-  разработчика», нажмите «Загрузить распакованное расширение», выберите распакованную папку и
-  обновите страницу программы.</p>
+  <p><b>Загрузку делает вкладка kad.arbitr с закладкой «Спор ← kad».</b> Сайт сам читать kad.arbitr
+  не может: картотека не разрешает другим сайтам читать свои страницы. Поэтому один раз
+  перетащите кнопку «Спор ← kad» на панель закладок, а когда работаете — держите открытой вкладку
+  kad.arbitr, в которой нажата эта закладка. Сайт шлёт ей запросы, она выполняет их обычными
+  запросами страницы картотеки — как если бы вы сами листали хронологию — и передаёт ответ сайту.
+  Ничего не устанавливается и никуда, кроме kad.arbitr, не отправляется. Нет связи — при вставке
+  ссылки сайт сам откроет вкладку карточки, останется нажать в ней закладку. Если kad.arbitr попросит
+  пройти проверку «вы не робот», пройдите её в этой вкладке и нажмите закладку ещё раз.</p>
+  <p>На компьютере, где можно ставить расширения, их можно не держать открытыми: расширение
+  «Обособленный спор» (см. README) загружает карточки само и проверяет споры по расписанию, пока
+  открыт браузер.</p>
+  <p><b>Ручной путь</b> — «Вставить страницу карточки вручную»: Ctrl+A, Ctrl+C на странице карточки
+  и Ctrl+V в поле; можно перетащить сохранённую страницу (.html, .mhtml).</p>
 
   <h4>2. Как из карточки выделяется спор</h4>
   <p>Картотека связывает документы с заявлением полем «В ответ на». Программа берёт
@@ -557,11 +582,16 @@ a.btn{text-decoration:none;display:inline-block}
   текстами и уточнениями; «Открыть спор» возвращает его обратно. Если вставить в открытый спор
   свежую карточку, новые документы будут помечены. В файле персональные данные участников
   дела — храните его там же, где материалы дела.</p>
+  <p class="local">Спор встаёт на отслеживание сам, как только загружена карточка и указана дата: он
+  появляется в «Моих спорах». Пока открыты сайт и вкладка kad.arbitr с закладкой, сайт перепроверяет
+  карточки по расписанию, показывает уведомление о новых документах (если разрешить) и число споров с
+  новым — в заголовке вкладки. Кнопки «Проверить» и «Проверить все» работают в любой момент. Документы,
+  появившиеся с последнего просмотра, помечены «новое». Все данные — только в этом браузере.</p>
   <p class="ext">Спор встаёт на отслеживание сам, как только загружена карточка и указана дата: он
   появляется в «Моих спорах», а расширение перепроверяет карточку по расписанию, пока браузер открыт, и показывает уведомление
   о новых документах. Документы, появившиеся с последнего просмотра, помечены «новое», а число
   таких споров видно на значке расширения. Все данные — только в этом браузере.</p>
-  <p class="srv noext">Спор встаёт на отслеживание сам, как только загружена карточка и указана дата: он
+  <p class="http">Спор встаёт на отслеживание сам, как только загружена карточка и указана дата: он
   появляется в «Моих спорах», а сервер
   перепроверяет карточку по расписанию. Документы, появившиеся с последнего просмотра,
   помечены «новое».</p>
@@ -2257,15 +2287,594 @@ a.btn{text-decoration:none;display:inline-block}
 </script>
 <script>
 /*
+ * Записи API картотеки → построчный текст, который разбирает src/kad.js.
+ * Наружу — globalThis.KadItems. Работает и в Node (сервер), и в браузере
+ * (фоновая часть расширения), поэтому без импортов: GUID_RE — свой.
+ *
+ * Имена полей картотеки документированы только её вёрсткой; поля ищутся
+ * по смыслу имени (Date/DisplayDate, DocumentTypeName, ContentTypes…), а
+ * связь и заседание — ещё и в строке AdditionalInfo. Устройство ответа
+ * проверено на настоящей карточке (tools/kad-probe.mjs).
+ */
+(function () {
+  'use strict';
+
+  const GUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+  const pick = (o, re) => {
+    for (const [k, v] of Object.entries(o || {})) if (re.test(k) && v != null && v !== '') return v;
+    return null;
+  };
+
+  /** «/Date(1719100800000)/», ISO или «23.06.2026» → «23.06.2026». */
+  function ruDate(v) {
+    if (!v) return '';
+    const s = String(v);
+    let m = s.match(/^\d{1,2}\.\d{1,2}\.\d{4}/);
+    if (m) return m[0];
+    m = s.match(/\/Date\((-?\d+)/);
+    const d = m ? new Date(+m[1]) : /^\d{4}-\d{2}-\d{2}/.test(s) ? new Date(s) : null;
+    if (!d || isNaN(d)) return '';
+    const msk = new Date(d.getTime() + 3 * 3600 * 1000);  // даты картотеки — московские
+    return `${String(msk.getUTCDate()).padStart(2, '0')}.${String(msk.getUTCMonth() + 1).padStart(2, '0')}.${msk.getUTCFullYear()}`;
+  }
+
+  const names = (v) => (Array.isArray(v) ? v : v ? [v] : [])
+    .map((x) => typeof x === 'string' ? x : (x && (x.Organization || x.Name || x.Fio || x.FullName || x.ShortName || x.Title)) || '')
+    .filter(Boolean);
+
+  /** Любая строка внутри записи, начинающаяся с «В ответ на». */
+  function deepFind(o, re, depth = 0) {
+    if (depth > 3 || !o) return null;
+    if (typeof o === 'string') return re.test(o) ? o : null;
+    if (typeof o !== 'object') return null;
+    for (const v of Object.values(o)) {
+      const hit = deepFind(v, re, depth + 1);
+      if (hit) return hit;
+    }
+    return null;
+  }
+
+  /**
+   * Записи API → построчный текст с явными метками. Имена полей картотеки
+   * документированы только её вёрсткой, поэтому поля ищутся по смыслу имени,
+   * а не по точному совпадению: Date/DisplayDate, DocumentTypeName, ContentTypes…
+   */
+  function itemsToText(items, caseId, base = 'https://kad.arbitr.ru') {
+    const byId = new Map(items.map((it) => [String(it.Id || it.id || ''), it]));
+    const blocks = [];
+    const sorted = [...items].sort((a, b) => {
+      const da = ruDate(pick(a, /^(?:DisplayDate|Date|RegDate|DocumentDate)$/i)).split('.').reverse().join('');
+      const db = ruDate(pick(b, /^(?:DisplayDate|Date|RegDate|DocumentDate)$/i)).split('.').reverse().join('');
+      return da < db ? -1 : da > db ? 1 : 0;
+    });
+    for (const it of sorted) {
+      if (it.IsDeleted) continue;
+      const date = ruDate(pick(it, /^(?:DisplayDate|Date|RegDate|DocumentDate|RegistrationDate)$/i) || pick(it, /date/i));
+      if (!date) continue;
+      const type = pick(it, /^(?:DocumentTypeName|DocumentType|TypeName|DocType)$/i) || 'Документ';
+      const content = pick(it, /^(?:ContentTypes|ContentTypeName|ContentType|Content|Subject)$/i);
+      const contentText = Array.isArray(content) ? content.map((x) => typeof x === 'string' ? x : x && (x.Name || x.Title) || '').filter(Boolean).join('; ') : (typeof content === 'string' ? content : '');
+      const lines = [date, String(type)];
+      if (contentText) lines.push(contentText);
+      const from = names(pick(it, /^(?:Declarers|Declarer|Applicants|Applicant|Participants|Sides)$/i));
+      if (from.length) lines.push(`Подал: ${from.join(', ')}`);
+      const judges = names(pick(it, /^(?:Judges|Judge|JudgeName)$/i));
+      if (judges.length) lines.push(`Судья: ${judges.join(', ')}`);
+      const id = String(it.Id || it.id || '');
+      if (GUID_RE.test(id)) lines.push(`Документ: ${id.match(GUID_RE)[0]}`);
+
+      // Картотека пишет связь и заседание в AdditionalInfo одной строкой:
+      // «Штрихкод: 0031739831 В ответ на Заявление (23.06.2026) от ПАО …,
+      // Дата и время судебного заседания 15.09.2026, 10:00, зал № 602».
+      let info = String(pick(it, /^AdditionalInfo$/i) || '').replace(/штрихкод:?\s*\d+/i, '').trim();
+      let hearingText = '';
+      const hm = info.match(/,?\s*дата\s+и\s+время\s+(?:судебного\s+)?заседания[:\s]*(.+)$/i);
+      if (hm) { hearingText = hm[1].trim(); info = info.slice(0, hm.index).trim(); }
+      let reasonText = '';
+      const rm = info.match(/в\s+ответ\s+на[:\s]*(.+)$/i);
+      if (rm) { reasonText = rm[1].replace(/[,;]\s*$/, '').trim(); info = info.slice(0, rm.index).trim(); }
+      if (!reasonText) {
+        const deep = deepFind(it, /в\s+ответ\s+на/i);
+        if (deep) reasonText = deep.replace(/^[\s\S]*?в\s+ответ\s+на[:\s]*/i, '').trim();
+      }
+
+      // Ссылка на документ точнее любого сравнения по дате, а текст нужен
+      // человеку и тем записям, у которых ссылки нет.
+      const reasonId = pick(it, /(?:Reason|Parent|Answer|Response|Basis)(?:Document)?Id$/i);
+      if (reasonText) {
+        lines.push(`В ответ на: ${reasonText}`);
+      } else if (reasonId && byId.has(String(reasonId))) {
+        const ref = byId.get(String(reasonId));
+        const rType = pick(ref, /^(?:DocumentTypeName|DocumentType|TypeName)$/i) || 'Документ';
+        const rFrom = names(pick(ref, /^(?:Declarers|Declarer|Applicants)$/i)).join(', ');
+        lines.push(`В ответ на: ${rType} (${ruDate(pick(ref, /^(?:DisplayDate|Date)$/i))})${rFrom ? ` от ${rFrom}` : ''}`);
+      }
+      if (reasonId && GUID_RE.test(String(reasonId))) lines.push(`Ответ на документ: ${String(reasonId).match(GUID_RE)[0]}`);
+
+      const hearing = pick(it, /^(?:HearingDate|HearingDateTime|SessionDate)$/i);
+      if (hearingText) {
+        lines.push(`Дата и время судебного заседания: ${hearingText}`);
+      } else if (hearing) {
+        const place = pick(it, /^(?:HearingPlace|SessionPlace|Place)$/i);
+        const t = String(hearing).match(/\/Date\((-?\d+)/)
+          ? (() => { const d = new Date(+String(hearing).match(/\/Date\((-?\d+)/)[1] + 3 * 3600 * 1000); return `${ruDate(hearing)}, ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`; })()
+          : String(hearing);
+        lines.push(`Дата и время судебного заседания: ${t}${place ? `, ${place}` : ''}`);
+      }
+      const comment = pick(it, /^(?:Comment|Description|Note)$/i);
+      for (const extra of [info, typeof comment === 'string' ? comment : '']) {
+        if (extra && extra.trim()) lines.push(extra.trim().replace(/\s+/g, ' '));
+      }
+      const pub = pick(it, /^(?:PublishDisplayDate|PublishDate|PublicationDate)$/i);
+      if (pub) lines.push(`Публикация: ${/\/Date\(/.test(pub) ? ruDate(pub) : pub}`);
+      // Срок обжалования, который считает сама картотека.
+      const appeal = pick(it, /^AppealDate$/i);
+      if (appeal) lines.push(`Обжалование до: ${ruDate(appeal)}`);
+
+      const file = pick(it, /^(?:FileName|File)$/i);
+      const docCase = String(it.CaseId || caseId || '');
+      if (file && id && docCase) lines.push(`PDF: ${base}/Kad/PdfDocument/${docCase}/${id}/${encodeURIComponent(String(file))}`);
+      blocks.push(lines.join('\n'));
+    }
+    return blocks.join('\n');
+  }
+
+  /**
+   * Из двух текстов — страницы и API картотеки — берётся тот, где больше
+   * записей. К тексту API приписывается шапка дела со страницы: номер, суд,
+   * должник в записях API не повторяются.
+   */
+  function chooseText(r, url) {
+    const { KadCard } = globalThis;
+    const page = r.pageText ? KadCard.parse(r.pageText) : null;
+    const api = r.apiText ? KadCard.parse(r.apiText) : null;
+    const pn = page ? page.records.length : 0;
+    const an = api ? api.records.length : 0;
+    if (an && an >= pn) {
+      const m = (page && page.meta) || {};
+      const head = [m.caseNo, m.court, m.debtor && `Должник: ${m.debtor}`, m.judge && `Судья: ${m.judge}`, url].filter(Boolean);
+      return { text: `${head.join('\n')}\n${r.apiText}`, note: `Карточка загружена: ${an} документов из хронологии картотеки` };
+    }
+    if (pn) return { text: r.pageText, note: `Карточка загружена: ${pn} документов по тексту страницы` };
+    const e = new Error('в загруженной карточке не найдено ни одного документа — возможно, картотека изменила устройство страницы. Вставьте страницу вручную (Ctrl+A, Ctrl+C)');
+    e.status = 502;
+    throw e;
+  }
+
+  /*
+   * Итог загрузки карточки: лучший из двух текстов и заметка — сколько
+   * документов и что взяты все страницы хронологии, если их несколько.
+   * r — { pageText, apiText, apiItems, pages: [страниц у каждой инстанции] }.
+   */
+  function cardFrom(r, url) {
+    const got = chooseText(r, url);
+    const pages = (r.pages || []).reduce((a, b) => a + b, 0);
+    const note = pages > 1 && r.apiItems ? `${got.note} (все ${pages} стр. хронологии)` : got.note;
+    return { text: got.text, note, at: new Date().toISOString(), source: 'kad.arbitr' };
+  }
+
+  globalThis.KadItems = { itemsToText, chooseText, cardFrom, ruDate };
+})();
+
+</script>
+<script>
+/*
+ * Текст из PDF судебного акта. Наружу — globalThis.KadPdf. Общий для
+ * сервера (pdf.js из node_modules) и расширения (pdf.js в его папке):
+ * библиотеку передаёт вызывающий код.
+ *
+ * Акты картотеки — PDF с текстовым слоем, поэтому хватает извлечения
+ * текста, без распознавания. Строки собираются по вертикальной координате:
+ * pdf.js отдаёт текст кусками, и без этого «О П Р Е Д Е Л И Л:» и даты
+ * рвутся посередине.
+ */
+(function () {
+  'use strict';
+
+  async function text(getDocument, bytes) {
+    const task = getDocument({
+      data: bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes),
+      isEvalSupported: false,
+      disableFontFace: true,
+      useSystemFonts: false,
+      verbosity: 0
+    });
+    const doc = await task.promise;
+    const out = [];
+    try {
+      for (let i = 1; i <= doc.numPages; i++) {
+        const page = await doc.getPage(i);
+        const tc = await page.getTextContent();
+        let line = '';
+        let lastY = null;
+        for (const it of tc.items) {
+          if (typeof it.str !== 'string') continue;
+          const y = it.transform ? it.transform[5] : lastY;
+          if (lastY !== null && y !== null && Math.abs(y - lastY) > 2.5) {
+            out.push(line);
+            line = '';
+          }
+          line += it.str;
+          lastY = y;
+          if (it.hasEOL) { out.push(line); line = ''; lastY = null; }
+        }
+        if (line) out.push(line);
+        page.cleanup();
+      }
+    } finally {
+      await task.destroy();
+    }
+    return out.map((l) => l.replace(/\s+/g, ' ').trim()).filter(Boolean).join('\n');
+  }
+
+  const isPdf = (b) => !!b && b.length > 4 && b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46;
+
+  globalThis.KadPdf = { text, isPdf };
+})();
+
+</script>
+<script>
+/*
+ * Отслеживаемые споры: хранение, сводка, проверка карточки, новые документы.
+ * Один код для сайта (хранилище — IndexedDB этого браузера) и расширения
+ * (chrome.storage). Чем загружать карточку и тексты определений, передаёт
+ * тот, кто создаёт: сайт — через закладку на странице картотеки, расширение —
+ * сам.
+ *
+ * Хранилище — ключ → значение: ids (порядок споров), d:<id> (спор), settings.
+ */
+(function () {
+  const { KadCard: C, KadDispute: X } = globalThis;
+
+  /* Поля, которые ведёт проверка: страница их не присылает и не затирает. */
+  const KEEP = ['createdAt', 'checkedAt', 'error', 'note', 'notified'];
+  const DEFAULTS = { checkHours: 4, notify: true, pdfTexts: true };
+  const KAD_CARD = /^https?:\/\/(?:www\.)?kad\.arbitr\.ru\/Card\/[0-9a-f-]{36}/i;
+
+  const isAct = (e) => !e.rec.synthetic && /^(?:ruling|decision|appealRuling|protocol|courtDoc)$/.test(e.cls.nature || '');
+  const newId = () => [...crypto.getRandomValues(new Uint8Array(6))].map((b) => b.toString(16).padStart(2, '0')).join('');
+
+  /* Разбор тем же кодом, что на странице. */
+  function analyze(st) {
+    const card = st.card && st.card.raw
+      ? C.parse(st.card.raw, { html: st.card.html })
+      : { meta: {}, records: [], diagnostics: {} };
+    const d = X.build(card, {
+      filedDate: st.filed, applicant: st.applicant, role: st.role, hearing: st.hearing, subject: st.subject,
+      texts: st.texts || {}, rootId: st.rootId, include: st.include, exclude: st.exclude, known: st.known
+    });
+    return { card, d, summary: { ...X.summary(d), debtor: card.meta.debtor || '' } };
+  }
+
+  /**
+   * store — { get(key), set(key, value), remove(key) }, всё асинхронно;
+   * card(url) → { text, note, at, source }; pdf(url) → текст определения.
+   */
+  function create({ store, card, pdf }) {
+    const ids = async () => { const v = await store.get('ids'); return Array.isArray(v) ? v : []; };
+    const load = async (id) => (await store.get(`d:${id}`)) || null;
+
+    async function put(st) {
+      await store.set(`d:${st.id}`, st);
+      const list = await ids();
+      if (!list.includes(st.id)) await store.set('ids', [...list, st.id]);
+    }
+
+    async function remove(id) {
+      await store.remove(`d:${id}`);
+      await store.set('ids', (await ids()).filter((x) => x !== id));
+    }
+
+    async function settings(patch) {
+      const s = { ...DEFAULTS, ...((await store.get('settings')) || {}) };
+      if (!patch) return s;
+      const next = { ...s, ...patch };
+      await store.set('settings', next);
+      return next;
+    }
+
+    async function save(state) {
+      const prev = state.id ? await load(state.id) : null;
+      const st = { ...state, app: 'kadmonitoring' };
+      delete st.summary;
+      for (const k of KEEP) {
+        if (prev && prev[k] !== undefined) st[k] = prev[k];
+        else delete st[k];
+      }
+      const now = new Date().toISOString();
+      st.id = prev ? prev.id : (state.id || newId());
+      st.createdAt = st.createdAt || now;
+      st.savedAt = now;
+      // То, что видно при постановке на отслеживание, новым не считается.
+      if (!prev) st.notified = [...(st.known || [])];
+      st.summary = analyze(st).summary;
+      await put(st);
+      return st.id;
+    }
+
+    async function list() {
+      const out = [];
+      for (const id of await ids()) {
+        const st = await load(id);
+        if (!st) continue;
+        let summary;
+        // Сводка пересчитывается: «осталось N дней» и «истёк срок» зависят от сегодняшней даты.
+        try { summary = analyze(st).summary; } catch (e) { summary = { stageLabel: 'ошибка разбора', tone: 'bad' }; }
+        out.push({
+          id, filed: st.filed, url: st.url, error: st.error || null, savedAt: st.savedAt || null,
+          checkedAt: st.checkedAt || (st.card && st.card.source === 'kad.arbitr' && st.card.at) || null,
+          summary
+        });
+      }
+      return out.sort((a, b) => String(b.savedAt || '').localeCompare(String(a.savedAt || '')));
+    }
+
+    /*
+     * Проверка: свежая карточка, тексты новых определений, новые документы.
+     * → { st, a, fresh } — fresh: события, о которых ещё не сообщали.
+     */
+    async function check(id) {
+      const st = await load(id);
+      if (!st) throw new Error('нет такого спора');
+      if (!KAD_CARD.test(st.url || '')) throw new Error('у спора нет ссылки на карточку kad.arbitr');
+      const s = await settings();
+      try {
+        const got = await card(st.url);
+        const c = { raw: got.text, html: false, source: got.source || 'kad.arbitr', at: got.at };
+        const texts = { ...(st.texts || {}) };
+        if (s.pdfTexts && pdf) {
+          const a0 = analyze({ ...st, card: c, texts });
+          const todo = a0.d.events.filter((e) => isAct(e) && e.rec.pdf && !texts[e.rec.id]).slice(-6);
+          for (const e of todo) {
+            try { const t = await pdf(e.rec.pdf); if (t) texts[e.rec.id] = t; } catch (_) { /* следующий */ }
+          }
+        }
+        // Пока шла проверка, страница могла сохранить правки — берём свежую копию.
+        const cur = (await load(id)) || st;
+        cur.card = c;
+        cur.texts = { ...texts, ...(cur.texts || {}) };
+        cur.checkedAt = new Date().toISOString();
+        cur.error = null;
+        cur.note = got.note;
+        const a = analyze(cur);
+        const fresh = a.d.events.filter((e) => e.isNew && !(cur.notified || []).includes(e.rec.id));
+        if (fresh.length) cur.notified = [...(cur.notified || []), ...fresh.map((e) => e.rec.id)].slice(-500);
+        cur.summary = a.summary;
+        await put(cur);
+        return { st: cur, a, fresh };
+      } catch (err) {
+        const cur = (await load(id)) || st;
+        cur.checkedAt = new Date().toISOString();
+        cur.error = String((err && err.message) || err).slice(0, 300);
+        await put(cur);
+        throw err;
+      }
+    }
+
+    /* Споры с новыми документами — для значка и заголовка вкладки. */
+    async function withNew() {
+      let n = 0;
+      for (const id of await ids()) {
+        const st = await load(id);
+        if (st && st.summary && st.summary.newEvents) n++;
+      }
+      return n;
+    }
+
+    return { ids, load, put, remove, settings, save, list, check, withNew, analyze };
+  }
+
+  globalThis.KadTracker = { create, analyze, isAct, DEFAULTS };
+})();
+
+</script>
+<script type="text/plain" id="kadBridgeSrc">
+(function (SITE, APP) {
+if (window.__kadSpor) { window.__kadSpor.connect(); return; }
+if (!/(^|\.)kad\.arbitr\.ru$/i.test(location.hostname) && !window.__kadSporTest) {
+alert('Эта закладка работает на странице kad.arbitr.ru: откройте картотеку и нажмите закладку там.');
+return;
+}
+(function () {
+function instancesIn(html) {
+const ids = new Set();
+for (const m of html.matchAll(/<input\b[^>]*\bjs-instanceId\b[^>]*>/gi)) {
+const v = m[0].match(/\bvalue\s*=\s*["']([^"']+)["']/i);
+if (v) ids.add(v[1]);
+}
+return [...ids];
+}
+async function chronology(caseId, instances, base = '', referrer = '') {
+const items = [];
+const pages = [];
+const fails = [];
+for (const id of instances) {
+let count = 0;
+for (let page = 1; page <= 200; page++) {
+const url = `${base}/Kad/InstanceDocumentsPage?_=${Date.now()}&id=${encodeURIComponent(id)}&caseId=${encodeURIComponent(caseId)}&perPage=30&page=${page}`;
+const opts = { credentials: 'include', headers: { 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json, text/javascript, */*; q=0.01' } };
+if (referrer) opts.referrer = referrer;
+let j = null;
+let why = null;
+try {
+const r = await fetch(url, opts);
+const body = await r.text();
+try { j = JSON.parse(body); } catch (_) { j = null; }
+if (!(j && j.Result && j.Result.Items && j.Result.Items.length)) {
+why = { status: r.status, type: r.headers.get('content-type'), len: body.length,
+sample: j && j.Result && j.Result.Items ? 'пустой список' : body.replace(/\s+/g, ' ').slice(0, 160) };
+}
+} catch (e) { why = { error: String((e && e.message) || e) }; }
+const res = j && j.Result;
+const list = (res && res.Items) || [];
+items.push(...list);
+if (list.length) count = page;
+if (why && page === 1) fails.push(why);
+if (!list.length || page >= ((res && res.PagesCount) || 1)) break;
+await new Promise((ok) => setTimeout(ok, 300));
+}
+pages.push(count);
+}
+return { items, pages, fails };
+}
+globalThis.KadPage = { instancesIn, chronology };
+})();
+const K = globalThis.KadPage;
+let partner = null;
+let served = 0;
+const box = document.createElement('div');
+box.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:2147483647;max-width:340px;padding:12px 14px;' +
+'background:#fff;color:#2a211c;border:1px solid #d9cfc7;border-left:4px solid #8d321f;border-radius:10px;' +
+'box-shadow:0 6px 24px rgba(0,0,0,.18);font:13px/1.45 system-ui,sans-serif';
+document.body.append(box);
+function show() {
+const alive = partner && !partner.closed;
+box.innerHTML = '';
+const b = document.createElement('b');
+b.textContent = 'Обособленный спор';
+const p = document.createElement('div');
+p.textContent = alive
+? `Вкладка связана с сайтом: через неё сайт загружает карточки kad.arbitr. Не закрывайте её.${served ? ` Загружено: ${served}.` : ''}`
+: 'Сайт программы закрыт.';
+box.append(b, p);
+if (!alive) {
+const a = document.createElement('button');
+a.textContent = 'Открыть сайт';
+a.style.cssText = 'margin-top:6px;padding:4px 10px;border:1px solid #8d321f;border-radius:6px;background:#8d321f;color:#fff;cursor:pointer';
+a.onclick = () => { connect(); };
+box.append(a);
+}
+}
+function hello() {
+if (partner && !partner.closed) partner.postMessage({ kadspor: 1, type: 'hello', v: 1 }, SITE);
+}
+function connect() {
+if (window.opener && !window.opener.closed) partner = window.opener;
+if (!partner || partner.closed) partner = window.open(`${APP}#kad`, 'kadspor-site');
+hello();
+try { partner.focus(); } catch (_) { /* браузер не дал переключить вкладку */ }
+show();
+}
+function inFrame(path, ready, ms) {
+return new Promise((resolve, reject) => {
+const fr = document.createElement('iframe');
+fr.style.cssText = 'position:fixed;left:-40px;top:0;width:10px;height:10px;opacity:0;border:0';
+fr.src = path;
+document.body.append(fr);
+const t0 = Date.now();
+const tick = setInterval(() => {
+let doc = null;
+try { doc = fr.contentDocument; } catch (_) { doc = null; }
+const got = doc && ready(doc, fr);
+if (got || Date.now() - t0 > ms) {
+clearInterval(tick);
+fr.remove();
+if (got) resolve(got);
+else reject(new Error(doc && /робот|captcha|капч/i.test(doc.body ? doc.body.innerText : '')
+? 'kad.arbitr просит пройти проверку «вы не робот» — пройдите её в этой вкладке и повторите'
+: 'страница картотеки не открылась вовремя'));
+}
+}, 400);
+});
+}
+async function card(caseId) {
+const path = `/Card/${caseId}`;
+const here = location.pathname.toLowerCase() === path.toLowerCase() && document.querySelector('input.js-instanceId');
+let html = here ? document.documentElement.outerHTML : await (await get(path)).text();
+let ids = K.instancesIn(html);
+if (!ids.length) {
+html = await inFrame(path, (d) => d.querySelector('input.js-instanceId') && d.documentElement.outerHTML, 45000);
+ids = K.instancesIn(html);
+}
+if (!ids.length) throw new Error('на странице карточки нет хронологии дела — возможно, картотека изменила устройство страницы');
+const got = await K.chronology(caseId, ids, '', location.origin + path);
+return { html, items: got.items, pages: got.pages, fails: got.fails };
+}
+const isPdf = (b) => b.byteLength > 4 && String.fromCharCode(...new Uint8Array(b.slice(0, 5))) === '%PDF-';
+function solve(html, url) {
+return new Promise((resolve, reject) => {
+const fr = document.createElement('iframe');
+fr.style.cssText = 'position:fixed;left:-40px;top:0;width:10px;height:10px;opacity:0;border:0';
+document.body.append(fr);
+const w = fr.contentWindow;
+let done = false;
+const finish = (body, err) => {
+if (done) return;
+done = true;
+setTimeout(() => fr.remove(), 0);
+if (body) resolve(body); else reject(err || new Error('проверка картотеки перед PDF не пройдена'));
+};
+const grab = (form) => finish(new URLSearchParams(new w.FormData(form)).toString());
+w.HTMLFormElement.prototype.submit = function () { grab(this); };
+w.HTMLFormElement.prototype.requestSubmit = function () { grab(this); };
+w.addEventListener('submit', (e) => { e.preventDefault(); grab(e.target); }, true);
+setTimeout(() => finish(null), 20000);
+try {
+w.document.open();
+try { w.history.replaceState(null, '', url); } catch (_) { /* адрес рамки не важен */ }
+w.document.write(html);
+w.document.close();
+} catch (e) { finish(null, e); }
+});
+}
+async function get(path, opts) {
+for (let i = 0; ; i++) {
+const r = await fetch(path, { credentials: 'include', ...opts });
+if (![502, 503, 504].includes(r.status) || i >= 3) return r;
+await new Promise((ok) => setTimeout(ok, 3000 * (i + 1)));
+}
+}
+async function pdf(url) {
+const path = new URL(url, location.origin).pathname;
+const r = await get(path);
+const b = await r.arrayBuffer();
+if (isPdf(b)) return b;
+const html = new TextDecoder().decode(b);
+if (!/<form\b/i.test(html)) throw new Error('картотека вместо PDF отдала страницу без формы проверки');
+const body = await solve(html, r.url);
+const p = await get(r.url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
+const pb = await p.arrayBuffer();
+if (isPdf(pb)) return pb;
+throw new Error('картотека не отдала PDF и после проверки');
+}
+addEventListener('message', async (e) => {
+const m = e.data;
+if (e.origin !== SITE || !m || m.kadspor !== 1 || !m.id) return;
+if (e.source && e.source !== partner) { partner = e.source; show(); }
+const reply = (x, transfer) => e.source.postMessage({ kadspor: 1, type: 'result', re: m.id, ...x }, SITE, transfer || []);
+try {
+if (m.type === 'card') {
+const data = await card(m.caseId);
+served++;
+show();
+reply({ ok: true, data });
+} else if (m.type === 'pdf') {
+const data = await pdf(m.url);
+reply({ ok: true, data }, [data]);
+} else {
+reply({ ok: true, data: { v: 1 } });
+}
+} catch (err) {
+reply({ ok: false, error: String((err && err.message) || err) });
+}
+});
+setInterval(() => { hello(); if (!partner || partner.closed) show(); }, 2000);
+window.__kadSpor = { connect };
+connect();
+})
+</script>
+<script>
+/*
  * Логика страницы. Наружу ничего не выставляет.
  *
- * Режимов три. Страница без хранилища (файл с диска, GitHub Pages) работает
- * только со вставкой и хранит спор в скачанном файле. Страница расширения
- * браузера и страница локального сервера (server.mjs) вдобавок загружают
- * карточку по ссылке, тексты определений из PDF и держат список
- * отслеживаемых споров — на устройстве пользователя, не где-то ещё.
- * Разбор, правила и сроки в обоих режимах одни и те же и считаются здесь,
- * в браузере; сервер только приносит данные и хранит их.
+ * Режимы. Сайт (GitHub Pages) загружает карточки через вкладку kad.arbitr
+ * с нажатой закладкой «Спор ← kad» и хранит отслеживаемые споры в IndexedDB
+ * этого браузера — ничего не устанавливается. Страница расширения браузера
+ * и страница локального сервера (server.mjs) загружают карточки сами. Файл
+ * с диска работает только со вставкой. Разбор, правила и сроки во всех
+ * режимах одни и те же и считаются здесь, в браузере; данные споров — только
+ * на устройстве пользователя, не где-то ещё.
  */
 (function () {
   'use strict';
@@ -2558,6 +3167,7 @@ a.btn{text-decoration:none;display:inline-block}
     const bits = [m.caseNo && `Дело ${m.caseNo}`, m.debtor && `должник ${m.debtor}`, m.court].filter(Boolean);
     $('caseLine').textContent = bits.length ? bits.join(' · ') : 'оспаривание сделки должника — движение по карточке kad.arbitr';
     document.title = m.caseNo ? `${m.caseNo} — обособленный спор` : 'Обособленный спор — движение оспаривания сделки должника';
+    titleCount();
 
     reportParse(d);
     renderTiles(d);
@@ -2943,20 +3553,248 @@ a.btn{text-decoration:none;display:inline-block}
     async save(st) { return (await this.send({ type: 'save', state: st })).id; },
     remove(id) { return this.send({ type: 'remove', id }); },
     refresh(id) { return this.send({ type: 'check', id }); },
+    async setSettings(patch) { this.settings = await this.send({ type: 'settings', set: patch }); return this.settings; },
     note() {
       const h = this.settings && this.settings.checkHours;
       return h ? `карточки проверяются каждые ${h} ч, пока открыт браузер` : 'плановая проверка выключена';
     }
   };
 
+  /* ---------- сайт без расширения: вкладка kad.arbitr и закладка ---------- */
+
+  /*
+   * Сам сайт читать kad.arbitr не может — это запрещает браузер. Поэтому
+   * карточки загружает вкладка kad.arbitr, в которой нажата закладка
+   * «Спор ← kad» (src/bridge.js): сайт шлёт ей запросы, она выполняет их
+   * обычными запросами страницы картотеки и отвечает. Всё — внутри этого
+   * браузера; споры хранятся в его IndexedDB.
+   */
+  const KAD_ORIGIN = globalThis.KAD_TEST_ORIGIN || 'https://kad.arbitr.ru';
+
+  const Bridge = {
+    win: null,
+    last: 0,
+    shown: null,
+    seq: 0,
+    wait: new Map(),
+    waiters: [],
+    get ready() {
+      try { return !!this.win && !this.win.closed && Date.now() - this.last < 7000; } catch (_) { return false; }
+    },
+    listen() {
+      addEventListener('message', (e) => {
+        const m = e.data;
+        if (e.origin !== KAD_ORIGIN || !m || m.kadspor !== 1) return;
+        if (m.type === 'hello') {
+          const was = this.ready;
+          this.win = e.source;
+          this.last = Date.now();
+          if (!was) { bridgeChanged(); this.waiters.splice(0).forEach((f) => f()); }
+        } else if (m.type === 'result') {
+          const w = this.wait.get(m.re);
+          if (!w) return;
+          this.wait.delete(m.re);
+          if (m.ok) w.resolve(m.data); else w.reject(new Error(m.error || 'вкладка kad.arbitr не выполнила запрос'));
+        }
+      });
+      // Вкладку закрыли или ушли с неё — приветствия прекратились.
+      setInterval(() => { if (this.shown !== this.ready) bridgeChanged(); }, 1000);
+    },
+    /* Открыть вкладку картотеки (по нажатию или вставке — иначе браузер не даст). */
+    open(url) {
+      const w = window.open(url || `${KAD_ORIGIN}/`, 'kadbridge');
+      if (w) this.win = w;
+      return !!w;
+    },
+    connected() {
+      return this.ready ? Promise.resolve() : new Promise((ok) => this.waiters.push(ok));
+    },
+    call(type, payload, ms = 240000) {
+      if (!this.ready) return Promise.reject(new Error('нет связи с вкладкой kad.arbitr'));
+      const id = ++this.seq;
+      return new Promise((resolve, reject) => {
+        this.wait.set(id, { resolve, reject });
+        this.win.postMessage({ kadspor: 1, type, id, ...payload }, KAD_ORIGIN);
+        setTimeout(() => { if (this.wait.delete(id)) reject(new Error('вкладка kad.arbitr не ответила вовремя')); }, ms);
+      });
+    }
+  };
+
+  /* Адрес закладки: код для страницы картотеки (собран build.mjs) и адрес этого сайта. */
+  function bookmarklet() {
+    const src = $('kadBridgeSrc') ? $('kadBridgeSrc').textContent.trim() : '';
+    if (!src) return '';
+    const app = location.href.replace(/[?#].*$/, '');
+    return 'javascript:' + encodeURIComponent(`void (${src})(${JSON.stringify(location.origin)},${JSON.stringify(app)})`);
+  }
+
+  /* Хранилище споров сайта: IndexedDB этого браузера — ключ → значение. */
+  function idbStore() {
+    const db = new Promise((ok, fail) => {
+      const r = indexedDB.open('kadmonitoring', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('kv');
+      r.onsuccess = () => ok(r.result);
+      r.onerror = () => fail(r.error);
+    });
+    const tx = async (mode, fn) => {
+      const d = await db;
+      return new Promise((ok, fail) => {
+        const t = d.transaction('kv', mode);
+        const req = fn(t.objectStore('kv'));
+        t.oncomplete = () => ok(req.result);
+        t.onerror = () => fail(t.error);
+        t.onabort = () => fail(t.error);
+      });
+    };
+    return {
+      get: (k) => tx('readonly', (st) => st.get(k)),
+      set: (k, v) => tx('readwrite', (st) => st.put(v, k)).then(() => {}),
+      remove: (k) => tx('readwrite', (st) => st.delete(k)).then(() => {})
+    };
+  }
+
+  /* pdf.js — отдельными файлами рядом со страницей, загружается, когда понадобится текст определения. */
+  let pdfjs = null;
+  async function pdfLib() {
+    if (!pdfjs) {
+      pdfjs = await import(new URL('pdf.min.mjs', location.href).href);
+      pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdf.worker.min.mjs', location.href).href;
+    }
+    return pdfjs.getDocument;
+  }
+
+  const Local = {
+    kind: 'local',
+    settings: null,
+    tracker: null,
+    async init() {
+      if (!/^https?:$/.test(location.protocol) || !globalThis.indexedDB || !$('kadBridgeSrc')) return null;
+      this.tracker = globalThis.KadTracker.create({
+        store: idbStore(),
+        card: (url) => this.card(url),
+        pdf: (url) => this.pdf(url)
+      });
+      this.settings = await this.tracker.settings();
+      if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+      Bridge.listen();
+      return this;
+    },
+    async card(url) {
+      const m = url.match(KAD_URL);
+      if (!m) throw new Error('нужна ссылка вида https://kad.arbitr.ru/Card/…');
+      await needBridge(`${KAD_ORIGIN}/Card/${m[1]}`);
+      const r = await Bridge.call('card', { caseId: m[1] });
+      const items = r.items || [];
+      return globalThis.KadItems.cardFrom({
+        pageText: C.htmlToText(r.html || ''),
+        apiText: items.length ? globalThis.KadItems.itemsToText(items, m[1]) : '',
+        apiItems: items.length,
+        pages: r.pages
+      }, `https://kad.arbitr.ru/Card/${m[1]}`);
+    },
+    async pdf(url) {
+      if (!Bridge.ready) throw new Error('нет связи с вкладкой kad.arbitr');
+      const path = url.replace(/^https?:\/\/(?:www\.)?kad\.arbitr\.ru/i, '');
+      const buf = await Bridge.call('pdf', { url: path });
+      return globalThis.KadPdf.text(await pdfLib(), new Uint8Array(buf));
+    },
+    list() { return this.tracker.list(); },
+    async get(id) {
+      const st = await this.tracker.load(id);
+      if (!st) throw new Error('нет такого спора');
+      return st;
+    },
+    save(st) { return this.tracker.save(st); },
+    remove(id) { return this.tracker.remove(id); },
+    async refresh(id) {
+      const r = await this.tracker.check(id);
+      if (r.fresh.length) announce(r.st, r.a, r.fresh);
+      return { fresh: r.fresh.length };
+    },
+    async setSettings(patch) { this.settings = await this.tracker.settings(patch); return this.settings; },
+    note() {
+      const h = this.settings && this.settings.checkHours;
+      return h ? `карточки проверяются каждые ${h} ч, пока открыты этот сайт и вкладка kad.arbitr с закладкой` : 'плановая проверка выключена';
+    }
+  };
+
+  /*
+   * Нет связи с вкладкой картотеки — открыть её на нужной карточке и ждать,
+   * пока в ней нажмут закладку.
+   */
+  async function needBridge(url) {
+    if (Bridge.ready) return;
+    const opened = Bridge.open(url);
+    document.body.classList.add('waitkad');
+    echo('pasteEcho', opened
+      ? 'Открыта вкладка kad.arbitr — нажмите в ней закладку «Спор ← kad». Загрузка продолжится сама.'
+      : 'Нажмите «Открыть kad.arbitr» и в открывшейся вкладке — закладку «Спор ← kad». Загрузка продолжится сама.');
+    $('install').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    await Bridge.connected();
+    document.body.classList.remove('waitkad');
+  }
+
+  function bridgeChanged() {
+    const on = Bridge.ready;
+    Bridge.shown = on;
+    document.body.classList.toggle('linked', on);
+    $('kadState').textContent = on ? 'kad.arbitr: связь есть' : 'kad.arbitr: нет связи';
+    $('kadState').classList.toggle('on', on);
+  }
+
+  /* Новые документы: уведомление браузера (если разрешено) и число в заголовке вкладки. */
+  function announce(st, a, fresh) {
+    const s = a.summary;
+    if (backend && backend.settings && backend.settings.notify && globalThis.Notification && Notification.permission === 'granted') {
+      try {
+        new Notification(`${s.caseNo || 'Спор'}: ${fresh.length} ${D.plural(fresh.length, 'новый документ', 'новых документа', 'новых документов')}`,
+          { body: fresh.slice(0, 3).map((e) => `${D.fmt(e.rec.date)} — ${e.cls.doc}`).join('\n'), tag: `d:${st.id}` });
+      } catch (_) { /* уведомления недоступны */ }
+    }
+  }
+
+  async function titleCount() {
+    if (!backend || backend.kind !== 'local') return;
+    const n = await backend.tracker.withNew().catch(() => 0);
+    document.title = `${n ? `(${n}) ` : ''}${document.title.replace(/^\(\d+\) /, '')}`;
+  }
+
+  /* Плановая проверка — пока открыт сайт и есть связь с вкладкой картотеки. */
+  let planned = false;
+  async function plannedCheck() {
+    if (planned || !backend || backend.kind !== 'local' || !Bridge.ready) return;
+    const h = backend.settings && backend.settings.checkHours;
+    if (!h) return;
+    planned = true;
+    try {
+      for (const it of await backend.list()) {
+        if (!Bridge.ready) break;
+        const at = it.checkedAt ? Date.parse(it.checkedAt) : 0;
+        if (Date.now() - at < h * 3600000) continue;
+        try { await backend.refresh(it.id); } catch (_) { /* ошибка записана в спор */ }
+        await new Promise((ok) => setTimeout(ok, 5000));
+      }
+    } finally {
+      planned = false;
+      titleCount();
+      if (!$('listSec').hidden) showList();
+    }
+  }
+
   let backend = null;
 
   $('btnFetch').addEventListener('click', () => {
     if (backend) { fetchCard(); return; }
-    $('install').scrollIntoView({ behavior: 'smooth', block: 'center' });
-    $('install').classList.add('flash');
-    setTimeout(() => $('install').classList.remove('flash'), 1600);
-    toast('Загружать карточки по ссылке умеет расширение для браузера — установите его, это один раз');
+    toast('Загрузка по ссылке работает на сайте программы: okbl.github.io/kadmonitoring');
+  });
+
+  $('btnKad').addEventListener('click', () => {
+    const m = S.url.match(KAD_URL);
+    if (!Bridge.open(m ? `${KAD_ORIGIN}/Card/${m[1]}` : '')) toast('Браузер не дал открыть вкладку — разрешите всплывающие окна для этого сайта');
+  });
+  $('bookmarklet').addEventListener('click', (e) => {
+    e.preventDefault();
+    toast('Перетащите эту кнопку на панель закладок, а нажимайте её во вкладке kad.arbitr');
   });
 
   /*
@@ -3002,7 +3840,7 @@ a.btn{text-decoration:none;display:inline-block}
   /** Тексты судебных актов спора, которых ещё нет, — по одному, чтобы не частить. */
   async function loadActs() {
     if (!backend || !dispute) return;
-    if (backend.kind === 'ext' && !(backend.settings && backend.settings.pdfTexts)) return;
+    if (backend.settings && backend.settings.pdfTexts === false) return;
     const mine = S;
     const todo = dispute.events.filter((e) => isAct(e) && e.rec.pdf && !S.texts[e.rec.id]);
     let n = 0;
@@ -3146,6 +3984,7 @@ a.btn{text-decoration:none;display:inline-block}
     $('list').innerHTML = '<div class="note">Загружаю список…</div>';
     try {
       renderList(await backend.list());
+      titleCount();
     } catch (err) {
       $('list').innerHTML = `<div class="note warn">Список не загружен: ${esc(err.message)}</div>`;
     }
@@ -3250,19 +4089,24 @@ a.btn{text-decoration:none;display:inline-block}
   /* ---------- настройки расширения ---------- */
 
   function renderSettings() {
-    if (!backend || backend.kind !== 'ext') return;
+    if (!backend || !backend.settings) return;
     const st = backend.settings || {};
     $('setHours').value = String(st.checkHours || 0);
     $('setNotify').checked = !!st.notify;
     $('setPdf').checked = !!st.pdfTexts;
   }
   async function saveSettings(patch) {
-    backend.settings = await backend.send({ type: 'settings', set: patch });
+    await backend.setSettings(patch);
     renderSettings();
     $('listNote').textContent = backend.note();
   }
   $('setHours').addEventListener('change', (e) => saveSettings({ checkHours: +e.target.value }));
-  $('setNotify').addEventListener('change', (e) => saveSettings({ notify: e.target.checked }));
+  $('setNotify').addEventListener('change', async (e) => {
+    // На сайте уведомления показывает браузер — по его разрешению.
+    if (e.target.checked && backend.kind === 'local' && globalThis.Notification && Notification.permission === 'default')
+      await Notification.requestPermission().catch(() => {});
+    saveSettings({ notify: e.target.checked });
+  });
   $('setPdf').addEventListener('change', (e) => saveSettings({ pdfTexts: e.target.checked }));
 
   /* ---------- прочее ---------- */
@@ -3280,11 +4124,21 @@ a.btn{text-decoration:none;display:inline-block}
   window.addEventListener('afterprint', () => { printOpen.forEach((d) => { d.open = false; }); printOpen = []; });
 
   async function init() {
-    backend = await Ext.init().catch(() => null) || await Http.init().catch(() => null);
+    backend = await Ext.init().catch(() => null) || await Http.init().catch(() => null) || await Local.init().catch(() => null);
+    const kind = backend ? backend.kind : 'off';
     document.body.classList.toggle('server', !!backend);
-    document.body.classList.toggle('ext', !!backend && backend.kind === 'ext');
+    document.body.classList.toggle('ext', kind === 'ext');
+    document.body.classList.toggle('http', kind === 'server');
+    document.body.classList.toggle('local', kind === 'local');
+    document.body.classList.toggle('trk', kind === 'ext' || kind === 'local');
     readUrl();
     if (!backend) return;
+    if (kind === 'local') {
+      $('bookmarklet').href = bookmarklet();
+      bridgeChanged();
+      setInterval(plannedCheck, 60000);
+      titleCount();
+    }
     renderSettings();
     const m = location.hash.match(/^#d=([\w-]+)$/);
     if (m) openTracked(m[1]);
