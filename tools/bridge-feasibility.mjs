@@ -66,32 +66,50 @@ try {
     out.apiFromCard = { status: a1.status, items: a1.items, pages: a1.pages };
     const a2 = await api(location.origin + '/');
     out.apiRefRoot = { status: a2.status, items: a2.items };
-    const withFile = a1.list.filter((x) => x.FileName).slice(0, 2);
+    const withFile = a1.list.filter((x) => x.FileName).slice(0, 1);
     out.pdfs = [];
     const isPdf = (b) => b.byteLength > 4 && new TextDecoder().decode(new Uint8Array(b.slice(0, 5))) === '%PDF-';
+    const anon = (u) => String(u || '').replace(/[0-9a-f]{8}-[0-9a-f-]{27}/gi, '<id>').replace(/[^/?=&]+\.pdf/gi, '<файл>.pdf').replace(/(\?|&)(_|t|ts)=\d+/g, '$1$2=<n>');
     for (const it of withFile) {
       const url = `/Kad/PdfDocument/${caseId}/${it.Id}/${it.FileName}`;
+      const res = {};
+      // Что за HTML приходит вместо файла: устройство страницы без содержания.
       const f1 = await fetch(url, { credentials: 'include' });
-      const b1 = await f1.arrayBuffer();
-      const res = { direct: { status: f1.status, type: f1.headers.get('content-type'), pdf: isPdf(b1), len: b1.byteLength, redirected: f1.redirected } };
-      // Невидимая рамка проходит проверку, как вкладка; потом — снова запрос.
+      const t1 = await f1.text();
+      const d1 = new DOMParser().parseFromString(t1, 'text/html');
+      res.page = {
+        url: anon(f1.url), title: d1.title, len: t1.length,
+        scripts: [...d1.scripts].map((x) => x.src ? anon(new URL(x.src, location.href).pathname) : `inline:${x.textContent.length}`),
+        embeds: [...d1.querySelectorAll('embed,object,iframe')].map((x) => `${x.tagName}:${anon(x.getAttribute('src') || x.getAttribute('data'))}`),
+        forms: [...d1.forms].map((x) => `${x.method}:${anon(x.action)}`),
+        urls: [...new Set((t1.match(/["'](\/[^"'\s]*(?:pdf|Pdf|PDF|Document)[^"'\s]*)["']/g) || []).map(anon))].slice(0, 15),
+        words: [...new Set((t1.match(/\b(?:salto|wasm|challenge|captcha|token|hash|pow|cookie|fetch|XMLHttpRequest|blob|atob|location)\b/gi) || []).map((w) => w.toLowerCase()))]
+      };
+      // Рамка: ждём дольше, смотрим, что она загрузила.
       const fr = document.createElement('iframe');
       fr.style.cssText = 'position:fixed;left:-50px;top:0;width:10px;height:10px;opacity:0';
       fr.src = url;
       document.body.append(fr);
-      let finalUrl = null;
-      for (let i = 0; i < 40; i++) {
+      const seen = [];
+      for (let i = 0; i < 50; i++) {
         await new Promise((ok) => setTimeout(ok, 500));
-        try { finalUrl = fr.contentWindow.location.href; } catch (_) { finalUrl = 'cross'; }
-        if (/\/Document\/Pdf\//.test(finalUrl || '')) break;
+        let st = '';
+        try { st = `${anon(fr.contentWindow.location.href)} ${fr.contentDocument && fr.contentDocument.contentType}`; } catch (_) { st = 'нет доступа'; }
+        if (seen[seen.length - 1] !== st) seen.push(st);
       }
-      res.frameUrl = (finalUrl || '').replace(/[0-9a-f-]{36}/g, '<id>').replace(/\/[^/?]+\.pdf/i, '/<файл>.pdf');
-      try { res.frameType = fr.contentDocument && fr.contentDocument.contentType; } catch (_) { res.frameType = 'нет доступа'; }
-      for (const u of [finalUrl, url]) {
-        if (!u || u === 'cross' || u === 'about:blank') continue;
-        const f2 = await fetch(u, { credentials: 'include' });
-        const b2 = await f2.arrayBuffer();
-        res[u === url ? 'afterFrame' : 'afterFrameFinal'] = { status: f2.status, type: f2.headers.get('content-type'), pdf: isPdf(b2), len: b2.byteLength };
+      res.frame = seen;
+      try {
+        res.frameResources = fr.contentWindow.performance.getEntriesByType('resource').map((e) => `${e.initiatorType}:${anon(e.name.replace(location.origin, ''))}`).slice(0, 30);
+        res.frameEmbeds = [...fr.contentDocument.querySelectorAll('embed,object,iframe')].map((x) => `${x.tagName}:${x.type || ''}:${anon(x.getAttribute('src') || x.getAttribute('data'))}`);
+      } catch (e) { res.frameResources = 'нет доступа: ' + e.message; }
+      const cur = (() => { try { return fr.contentWindow.location.href; } catch (_) { return null; } })();
+      for (const [k, u, o] of [['again', url, {}], ['final', cur, {}], ['finalCache', cur, { cache: 'force-cache' }], ['finalDoc', cur, { headers: { Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' } }]]) {
+        if (!u || !/^http/.test(u)) continue;
+        try {
+          const f2 = await fetch(u, { credentials: 'include', ...o });
+          const b2 = await f2.arrayBuffer();
+          res[k] = { status: f2.status, type: f2.headers.get('content-type'), pdf: isPdf(b2), len: b2.byteLength, cc: f2.headers.get('cache-control') };
+        } catch (e) { res[k] = e.message; }
       }
       fr.remove();
       out.pdfs.push(res);
