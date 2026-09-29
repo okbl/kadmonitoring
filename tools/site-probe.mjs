@@ -82,11 +82,12 @@ try {
 
   // Спор встал на отслеживание; тексты определений — через проверку картотеки перед PDF.
   await page.waitForFunction(() => /^#d=/.test(location.hash), null, { timeout: 30000 });
-  const texts = await page.waitForFunction(async (fn) => {
-    const s = await (0, eval)(fn)();
-    const n = s.first ? Object.keys(s.first.texts || {}).length : 0;
-    return n > 0 && n;
-  }, stored.toString(), { timeout: 180000 }).then((h) => h.jsonValue(), () => 0);
+  let texts = 0;
+  for (let i = 0; i < 90 && !texts; i++) {
+    const s = await readStore(page);
+    texts = s.first ? Object.keys(s.first.texts || {}).length : 0;
+    if (!texts) await page.waitForTimeout(2000);
+  }
   console.log(`текстов определений: ${texts} · ${sec()}`);
 
   // Проверка по кнопке — через ту же вкладку.

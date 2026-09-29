@@ -87,12 +87,14 @@ test('сайт без расширения: закладка во вкладке
 
   // Спор встал на отслеживание сам; текст определения — из PDF за проверкой картотеки.
   await site.waitForFunction(() => /^#d=/.test(location.hash));
-  await site.waitForFunction(async (fn) => {
-    const s = await (0, eval)(fn)();
-    return s.first && Object.values(s.first.texts || {}).some((x) => /О П Р Е Д Е Л И Л/.test(x));
-  }, stored.toString(), { timeout: 60000 });
+  let s1 = null;
+  for (let i = 0; i < 60; i++) {
+    s1 = await site.evaluate(async (fn) => (0, eval)(fn)(), stored.toString());
+    if (s1.first && Object.values(s1.first.texts || {}).some((x) => /О П Р Е Д Е Л И Л/.test(x))) break;
+    await site.waitForTimeout(500);
+  }
+  assert.ok(Object.values(s1.first.texts || {}).some((x) => /О П Р Е Д Е Л И Л/.test(x)), 'текст определения из PDF за проверкой картотеки');
   assert.ok(mock.hits.some((h) => h.startsWith('/Document/Pdf/')), 'PDF взят за проверкой картотеки');
-  const s1 = await site.evaluate(async (fn) => (0, eval)(fn)(), stored.toString());
   assert.equal(s1.ids.length, 1);
   assert.equal(s1.first.summary.caseNo, 'А40-123456/2025');
 
@@ -103,6 +105,8 @@ test('сайт без расширения: закладка во вкладке
     ContentTypes: ['Об отложении судебного разбирательства'], HearingDate: null });
   await site.click('[data-check]');
   await site.waitForFunction(() => /новое: 1/.test(document.getElementById('list').textContent), null, { timeout: 60000 });
+  const s2 = await site.evaluate(async (fn) => (0, eval)(fn)(), stored.toString());
+  assert.match(s2.first.note || '', /Карточка загружена: \d+ документов.*все 3 стр\. хронологии/, 'проверка взяла все страницы хронологии');
   assert.match(await site.title(), /^\(1\) /, 'споры с новым — в заголовке вкладки');
 
   // Сайт перезагрузили — связь с вкладкой картотеки восстанавливается сама.

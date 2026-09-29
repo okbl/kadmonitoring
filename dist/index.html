@@ -2780,7 +2780,8 @@ else reject(new Error(doc && /робот|captcha|капч/i.test(doc.body ? doc.
 }
 async function card(caseId) {
 const path = `/Card/${caseId}`;
-let html = await (await get(path)).text();
+const here = location.pathname.toLowerCase() === path.toLowerCase() && document.querySelector('input.js-instanceId');
+let html = here ? document.documentElement.outerHTML : await (await get(path)).text();
 let ids = K.instancesIn(html);
 if (!ids.length) {
 html = await inFrame(path, (d) => d.querySelector('input.js-instanceId') && d.documentElement.outerHTML, 45000);

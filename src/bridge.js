@@ -85,7 +85,9 @@
 
   async function card(caseId) {
     const path = `/Card/${caseId}`;
-    let html = await (await get(path)).text();
+    // Эта вкладка и есть карточка — её разметка уже здесь.
+    const here = location.pathname.toLowerCase() === path.toLowerCase() && document.querySelector('input.js-instanceId');
+    let html = here ? document.documentElement.outerHTML : await (await get(path)).text();
     let ids = K.instancesIn(html);
     if (!ids.length) {
       html = await inFrame(path, (d) => d.querySelector('input.js-instanceId') && d.documentElement.outerHTML, 45000);
