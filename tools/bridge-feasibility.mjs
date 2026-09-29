@@ -83,8 +83,14 @@ try {
         embeds: [...d1.querySelectorAll('embed,object,iframe')].map((x) => `${x.tagName}:${anon(x.getAttribute('src') || x.getAttribute('data'))}`),
         forms: [...d1.forms].map((x) => `${x.method}:${anon(x.action)}`),
         urls: [...new Set((t1.match(/["'](\/[^"'\s]*(?:pdf|Pdf|PDF|Document)[^"'\s]*)["']/g) || []).map(anon))].slice(0, 15),
-        words: [...new Set((t1.match(/\b(?:salto|wasm|challenge|captcha|token|hash|pow|cookie|fetch|XMLHttpRequest|blob|atob|location)\b/gi) || []).map((w) => w.toLowerCase()))]
+        words: [...new Set((t1.match(/\b(?:salto|wasm|challenge|captcha|token|hash|pow|cookie|fetch|XMLHttpRequest|blob|atob|location)\b/gi) || []).map((w) => w.toLowerCase()))],
+        // Скрипт проверки и поля формы: длинные значения скрыты, имена и длины — видны.
+        script: [...d1.scripts].map((x) => anon(x.textContent).replace(/[A-Za-z0-9+/=_-]{24,}/g, (m) => `<${m.length}>`)).join('\n---\n'),
+        inputs: [...d1.querySelectorAll('input,textarea,select')].map((x) => `${x.name || x.id}:${x.type}:${(x.value || '').length}`),
+        formAttrs: [...d1.forms].map((x) => [...x.attributes].map((a) => `${a.name}=${anon(a.value)}`).join(' ')),
+        bodyTags: [...new Set([...d1.body.querySelectorAll('*')].map((x) => x.tagName))].slice(0, 20)
       };
+      out.challengeHtml = t1.replace(/[A-Za-z0-9+/=_-]{24,}/g, (m) => `<${m.length}>`).replace(/[0-9a-f]{8}-[0-9a-f-]{27}/gi, '<id>').replace(/\s+/g, ' ').slice(0, 3000);
       // Рамка: ждём дольше, смотрим, что она загрузила.
       const fr = document.createElement('iframe');
       fr.style.cssText = 'position:fixed;left:-50px;top:0;width:10px;height:10px;opacity:0';
