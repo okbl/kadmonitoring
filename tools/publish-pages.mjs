@@ -3,9 +3,10 @@
  * его в ветку gh-pages. Рабочую копию не трогает — ветка собирается во
  * временной папке через git worktree.
  *
- * На Pages — страница (вставка карточки вручную) и архив расширения:
- * загрузку по ссылке и проверку по расписанию делает расширение в браузере
- * пользователя. Данных споров на сайте нет и быть не должно.
+ * На Pages — страница программы, pdf.js рядом с ней (тексты определений) и
+ * архив расширения для тех, кому его можно поставить. Карточки сайт
+ * загружает через вкладку kad.arbitr с закладкой «Спор ← kad», споры
+ * хранит в браузере пользователя. Данных споров на сайте нет и быть не должно.
  *
  * Запуск: npm run pages [-- "сообщение коммита"]
  */
@@ -36,6 +37,11 @@ try {
   }
 
   fs.copyFileSync(path.join(root, 'dist', 'index.html'), path.join(dir, 'index.html'));
+  // pdf.js — страница загружает его, когда нужен текст определения.
+  for (const f of ['pdf.min.mjs', 'pdf.worker.min.mjs']) {
+    fs.copyFileSync(path.join(root, 'node_modules', 'pdfjs-dist', 'build', f), path.join(dir, f));
+  }
+  fs.copyFileSync(path.join(root, 'node_modules', 'pdfjs-dist', 'LICENSE'), path.join(dir, 'LICENSE-pdfjs.txt'));
   // Архив расширения — его скачивают со страницы («Скачать расширение»).
   fs.copyFileSync(path.join(root, 'dist', 'kad-spor-extension.zip'), path.join(dir, 'kad-spor-extension.zip'));
   // Без .nojekyll Pages прогоняет файлы через Jekyll — здесь это лишнее.
