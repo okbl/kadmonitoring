@@ -36,7 +36,7 @@ jobs:
           KEY=$(openssl rand -hex 16)
           echo "::add-mask::$KEY"
           echo "KAD_KEY=$KEY" >> "$GITHUB_ENV"
-          docker run -d --name h -p 8787:8787 -e KAD_KEY="$KEY" -e KAD_ORIGINS=http://127.0.0.1:8099 kad-handler
+          docker run -d --name kad-handler -p 8787:8787 -e KAD_KEY="$KEY" -e KAD_ORIGINS=http://127.0.0.1:8099 kad-handler
           for i in $(seq 1 30); do curl -sf http://127.0.0.1:8787/ping && break; sleep 1; done
       - name: Сайт через обработчик на настоящей карточке
         env:
@@ -45,7 +45,7 @@ jobs:
         run: node tools/handler-probe.mjs https://kad.arbitr.ru/Card/2aa24115-6d6f-4b9e-9c17-cd43a0bd8ef5 23.06.2026
       - name: Журнал обработчика
         if: always()
-        run: docker logs h 2>&1 | sed -E 's/[0-9a-f]{8}-[0-9a-f-]{27}/<id>/g' | tail -n 30
+        run: docker logs kad-handler 2>&1 | sed -E 's/[0-9a-f]{8}-[0-9a-f-]{27}/<id>/g' | tail -n 30
       - name: Опубликовать образ
         if: success() && github.event_name == 'push'
         run: |
