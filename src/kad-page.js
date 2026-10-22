@@ -33,15 +33,27 @@
         if (referrer) opts.referrer = referrer;
         let j = null;
         let why = null;
-        try {
-          const r = await fetch(url, opts);
-          const body = await r.text();
-          try { j = JSON.parse(body); } catch (_) { j = null; }
-          if (!(j && j.Result && j.Result.Items && j.Result.Items.length)) {
-            why = { status: r.status, type: r.headers.get('content-type'), len: body.length,
-              sample: j && j.Result && j.Result.Items ? 'пустой список' : body.replace(/\s+/g, ' ').slice(0, 160) };
+        // Сбой картотеки (5xx, обрыв связи) — повтор через пару секунд, до трёх попыток.
+        for (let attempt = 0; attempt < 3; attempt++) {
+          j = null;
+          why = null;
+          let retry = false;
+          try {
+            const r = await fetch(url, opts);
+            const body = await r.text();
+            try { j = JSON.parse(body); } catch (_) { j = null; }
+            if (!(j && j.Result && j.Result.Items && j.Result.Items.length)) {
+              why = { status: r.status, type: r.headers.get('content-type'), len: body.length,
+                sample: j && j.Result && j.Result.Items ? 'пустой список' : body.replace(/\s+/g, ' ').slice(0, 160) };
+              retry = r.status >= 500;
+            }
+          } catch (e) {
+            why = { error: String((e && e.message) || e) };
+            retry = true;
           }
-        } catch (e) { why = { error: String((e && e.message) || e) }; }
+          if (!retry) break;
+          await new Promise((ok) => setTimeout(ok, 2000 * (attempt + 1)));
+        }
         const res = j && j.Result;
         const list = (res && res.Items) || [];
         items.push(...list);

@@ -20,6 +20,7 @@
 import fs from 'fs';
 import path from 'path';
 import '../src/kad-items.js';
+import '../src/kad-page.js';
 
 /* Записи API → текст: общий с расширением браузера модуль src/kad-items.js. */
 export const itemsToText = (items, caseId) => globalThis.KadItems.itemsToText(items, caseId);
@@ -155,7 +156,15 @@ export class KadFetcher {
         await expand(page);
         await settle(page);
 
-        const items = await collectItems(page, captured, caseId);
+        // Хронология — тем же кодом, что у расширения и закладки (src/kad-page.js):
+        // инстанции из разметки, все страницы каждой, с повтором при сбое картотеки.
+        const ids = [...new Set(await page.$$eval('input.js-instanceId', (els) => els.map((e) => e.value).filter(Boolean)).catch(() => []))];
+        const got = ids.length
+          ? await page.evaluate(`(${globalThis.KadPage.chronology})(${JSON.stringify(caseId)}, ${JSON.stringify(ids)})`).catch(() => null)
+          : null;
+        // Запасной путь — ответы, которые страница запросила сама.
+        const items = got && got.items.length ? got.items : await collectItems(page, captured, caseId);
+        const pages = got && got.items.length ? got.pages : null;
         let pageText = await textOf(page);
         // Ссылки в тексте — всегда на kad.arbitr.ru, даже если страницу
         // отдал макет в тестах: по ним потом запрашиваются PDF.
@@ -165,6 +174,7 @@ export class KadFetcher {
           at: new Date().toISOString(),
           pageText,
           apiItems: items.length,
+          pages,
           apiText: items.length ? itemsToText(items, caseId) : '',
           // Для диагностики (tools/kad-probe.mjs): что именно отдал API.
           apiRaw: items,
