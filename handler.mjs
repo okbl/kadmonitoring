@@ -68,6 +68,9 @@ function cors(req, res) {
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Kad-Key');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Max-Age', '86400');
+    // Обработчик во внутренней сети организации, сайт — в интернете: Chrome
+    // спрашивает об этом отдельно (Private Network Access).
+    if (req.headers['access-control-request-private-network']) res.setHeader('Access-Control-Allow-Private-Network', 'true');
   }
 }
 
