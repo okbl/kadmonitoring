@@ -18,10 +18,13 @@ COPY handler.mjs ./
 COPY server ./server
 COPY src ./src
 
+# /data — профиль браузера (cookies картотеки) и кэш текстов определений;
+# подключите сюда том, чтобы они переживали обновление образа.
+RUN mkdir -p /data && chown pwuser:pwuser /data
 ENV HOST=0.0.0.0 \
     PORT=8787 \
-    KAD_PROFILE=/home/pwuser/kad-profile \
-    KAD_CACHE=/home/pwuser/kad-cache
+    KAD_PROFILE=/data/profile \
+    KAD_CACHE=/data/cache
 USER pwuser
 EXPOSE 8787
 CMD ["node", "handler.mjs"]

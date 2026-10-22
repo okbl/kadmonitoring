@@ -68,8 +68,7 @@ docker volume create kad-handler-data >/dev/null
 docker run -d --restart=always --name kad-handler \
   -p 127.0.0.1:8787:8787 \
   -e KAD_KEY="$KAD_KEY" \
-  -e KAD_PROFILE=/data/profile -e KAD_CACHE=/data/cache \
-  -v kad-handler-data:/data --user root \
+  -v kad-handler-data:/data \
   kad-handler >/dev/null
 for i in $(seq 1 30); do curl -sf http://127.0.0.1:8787/ping >/dev/null && break; sleep 1; done
 curl -sf http://127.0.0.1:8787/ping >/dev/null && echo 'обработчик отвечает' || { echo 'обработчик не запустился:'; docker logs --tail 30 kad-handler; exit 1; }
