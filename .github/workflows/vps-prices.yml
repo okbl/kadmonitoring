@@ -1,0 +1,17 @@
+# Цены дешёвых VPS у российских хостингов (для размещения обработчика).
+name: vps-prices
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/vps-prices.yml'
+      - 'tools/vps-prices.sh'
+
+jobs:
+  prices:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash tools/vps-prices.sh
