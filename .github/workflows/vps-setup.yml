@@ -18,13 +18,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Скрипт установки (как на VPS)
-        run: sudo env SKIP_TLS=1 BRANCH="${GITHUB_REF_NAME}" bash tools/vps-setup.sh
+        run: sudo env SKIP_TLS=1 BRANCH="${GITHUB_REF_NAME}" bash tools/vps-setup.sh | grep -v '^Ключ:'
       - name: Повторный запуск — обновление с тем же ключом
         run: |
           before=$(sudo cat /etc/kad-handler.env)
           sudo env SKIP_TLS=1 BRANCH="${GITHUB_REF_NAME}" bash tools/vps-setup.sh > /dev/null
           [ "$before" = "$(sudo cat /etc/kad-handler.env)" ] && echo 'ключ сохранён'
-          echo "KAD_KEY=$(sudo sed -n 's/^KAD_KEY=//p' /etc/kad-handler.env)" >> "$GITHUB_ENV"
+          key=$(sudo sed -n 's/^KAD_KEY=//p' /etc/kad-handler.env)
+          echo "::add-mask::$key"
+          echo "KAD_KEY=$key" >> "$GITHUB_ENV"
       - uses: actions/setup-node@v4
         with:
           node-version: 22
