@@ -57,6 +57,14 @@ try {
   const errors = [];
   const page = await ctx.newPage();
   page.on('pageerror', (e) => errors.push(e.message));
+  // Всплывающие сообщения сайта (ошибки загрузки текстов) — в журнал: в них даты и причины, без имён.
+  await page.addInitScript(() => {
+    window.__toasts = [];
+    new MutationObserver(() => {
+      const t = document.getElementById('toast');
+      if (t && t.textContent && window.__toasts[window.__toasts.length - 1] !== t.textContent) window.__toasts.push(t.textContent);
+    }).observe(document.documentElement, { subtree: true, childList: true, characterData: true });
+  });
   await page.goto(site);
   await page.waitForSelector('body.local');
   const bookmark = decodeURIComponent((await page.getAttribute('#bookmarklet', 'href')).slice('javascript:'.length));
@@ -99,6 +107,7 @@ try {
   console.log(`проверка: ошибка ${st.error ? '«' + st.error + '»' : 'нет'}; текстов ${Object.keys(st.texts || {}).length}; стадия «${st.summary && st.summary.stageLabel}»; ближайший срок ${st.summary && st.summary.nextDue ? st.summary.nextDue.date : '—'}; ${st.note || ''} · ${sec()}`);
 
   // Сайт перезагрузили — связь восстанавливается.
+  console.log(`сообщения сайта: ${JSON.stringify(await page.evaluate(() => window.__toasts).catch(() => []))}`);
   await page.reload();
   const back = await page.waitForFunction(() => /связь есть/.test(document.getElementById('kadState').textContent), null, { timeout: 15000 }).then(() => true, () => false);
   console.log(`после перезагрузки сайта связь: ${back ? 'есть' : 'нет'}`);
