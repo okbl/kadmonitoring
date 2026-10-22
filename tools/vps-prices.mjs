@@ -6,17 +6,12 @@
 import { chromium } from 'playwright-core';
 
 const PAGES = [
-  'https://timeweb.cloud/services/cloud-servers',
-  'https://timeweb.cloud/price',
-  'https://beget.com/ru/vps',
-  'https://vdsina.com/ru/cloud-servers',
-  'https://firstvds.ru/products/vds_vps',
-  'https://aeza.net/ru/virtual-servers',
   'https://ruvds.com/ru-rub/pricing',
-  'https://www.reg.ru/vps/',
-  'https://selectel.ru/prices/',
   'https://hostkey.ru/vps/',
-  'https://sprinthost.ru/vps.html',
+  'https://timeweb.cloud/services/cloud-servers',
+  'https://vdsina.ru/',
+  'https://firstvds.ru/',
+  'https://aeza.net/ru',
   'https://cloud.ru/products/evolution-compute'
 ];
 
@@ -34,12 +29,15 @@ for (const url of PAGES) {
     // Карточки тарифов: соседние строки с памятью, процессором, диском и ценой — склеиваем окном.
     const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
     const out = [];
-    for (let i = 0; i < lines.length && out.length < 25; i++) {
+    for (let i = 0; i < lines.length && out.length < 12; i++) {
       if (!/₽|руб/i.test(lines[i])) continue;
-      const win = lines.slice(Math.max(0, i - 6), i + 2).join(' | ');
-      if (/(ГБ|GB|Гб)\s*(RAM|ОЗУ|памят)|RAM|ОЗУ|памят/i.test(win) || /\b\d+\s*(ГБ|GB)\b/.test(win)) out.push(win.slice(0, 300));
+      const win = lines.slice(Math.max(0, i - 10), i + 3).join(' | ');
+      out.push(win.slice(0, 420));
     }
     console.log(out.length ? [...new Set(out)].join('\n') : `(цен не найдено; заголовок: ${await page.title()})`);
+    // Бесплатный уровень и бонусы — отдельной строкой, если упомянуты.
+    const free = lines.filter((l) => /free tier|бесплатн|бонус/i.test(l)).slice(0, 6);
+    if (free.length) console.log('— про бесплатное:', free.join(' | ').slice(0, 500));
   } catch (e) {
     console.log('ошибка:', e.message.split('\n')[0]);
   } finally {
