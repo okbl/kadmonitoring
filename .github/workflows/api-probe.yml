@@ -1,0 +1,18 @@
+# Проба сторонних API с данными kad.arbitr: CORS и документация (без ключей и данных дел).
+name: api-probe
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/api-probe.yml'
+      - 'tools/api-probe.sh'
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Сторонние API
+        run: bash tools/api-probe.sh
