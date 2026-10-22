@@ -219,6 +219,8 @@ body.waitkad #install{border-color:var(--acc);box-shadow:0 0 0 4px var(--acc-was
 .settings label{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
 .settings select{width:auto;padding:4px 8px;font-size:12.5px}
 .settings .m{margin-left:auto}
+.settings input[type=url]{width:300px;padding:4px 8px;font-size:12.5px}
+.settings input[type=password]{width:140px;padding:4px 8px;font-size:12.5px}
 .urlrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .urlrow input{flex:1 1 260px;min-width:0}
 .btn.busy{opacity:.7;cursor:progress}
@@ -321,6 +323,13 @@ a.btn{text-decoration:none;display:inline-block}
       <label title="Картотека отдаёт PDF только браузеру, прошедшему её проверку; расширение читает файл через отладчик своей вкладки — браузер на это время показывает полосу «начата отладка»"><input type="checkbox" id="setPdf"> загружать тексты определений (PDF)</label>
       <span class="m"><button class="linkbtn" id="btnExport">скачать все споры файлом</button> · <button class="linkbtn" id="btnImport">загрузить из файла</button></span>
     </div>
+    <div class="settings local">
+      <label title="Свой обработчик (handler.mjs) загружает карточки вместо вкладки kad.arbitr — см. README">Обработчик
+        <input id="setHandler" type="url" placeholder="https://… — адрес своего обработчика" autocomplete="off" spellcheck="false"></label>
+      <label>ключ <input id="setHandlerKey" type="password" autocomplete="off"></label>
+      <button class="btn btn-sm" id="btnHandler" type="button">Сохранить и проверить</button>
+      <span class="m" id="handlerState"></span>
+    </div>
     <div id="list"></div>
   </div>
 </section>
@@ -374,7 +383,8 @@ a.btn{text-decoration:none;display:inline-block}
             пока работаете: через неё загружаются карточки и тексты определений.</li>
         </ol>
         <p class="hint">Закладка берёт данные у kad.arbitr прямо в вашем браузере и передаёт их этой странице.
-        Споры хранятся <b>только в этом браузере</b> и никуда не отправляются.</p>
+        Споры хранятся <b>только в этом браузере</b> и никуда не отправляются. Если у вашей организации
+        есть свой обработчик kad.arbitr, впишите его адрес в «Моих спорах» — тогда вкладка и закладка не нужны.</p>
       </div>
       <button class="btn pri" id="btnKad" type="button">Открыть kad.arbitr</button>
     </div>

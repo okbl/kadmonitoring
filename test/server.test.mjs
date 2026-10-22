@@ -30,6 +30,13 @@ async function browser() {
   return null;
 }
 
+/* Срок из текста определения — всегда в будущем, иначе он перестанет быть ближайшим. */
+const DUE = (() => {
+  const d = new Date(Date.now() + 40 * 86400000);
+  const p2 = (n) => String(n).padStart(2, '0');
+  return { ru: `${p2(d.getUTCDate())}.${p2(d.getUTCMonth() + 1)}.${d.getUTCFullYear()}`, iso: d.toISOString().slice(0, 10) };
+})();
+
 /* PDF определения печатает тот же браузер — с настоящим текстовым слоем. */
 async function rulingPdf(b) {
   const p = await b.newPage();
@@ -37,7 +44,7 @@ async function rulingPdf(b) {
     <p>АРБИТРАЖНЫЙ СУД ГОРОДА МОСКВЫ</p><p>О П Р Е Д Е Л Е Н И Е</p>
     <p>Руководствуясь статьями 158, 184 АПК РФ, суд</p><p>О П Р Е Д Е Л И Л:</p>
     <p>Отложить судебное заседание на 21.10.2026 на 14 час. 20 мин.</p>
-    <p>Финансовому управляющему представить в суд выписки по счетам должника в срок до 14.10.2026.</p>
+    <p>Финансовому управляющему представить в суд выписки по счетам должника в срок до ${DUE.ru}.</p>
   </body></html>`);
   const pdf = await p.pdf({ format: 'A4' });
   await p.close();
@@ -123,7 +130,7 @@ test('сервер: карточка по ссылке, PDF, отслежива�
   assert.equal(list.length, 1);
   assert.equal(list[0].summary.caseNo, 'А40-123456/2025');
   // Поручение из текста определения стало ближайшим сроком.
-  assert.equal(list[0].summary.nextDue.date, '2026-10-14');
+  assert.equal(list[0].summary.nextDue && list[0].summary.nextDue.date, DUE.iso);
 
   assert.equal((await srv.api(`/api/disputes/${id}`, { method: 'DELETE' })).status, 200);
   assert.equal((await srv.api('/api/disputes/../../etc')).status, 404);

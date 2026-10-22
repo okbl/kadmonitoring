@@ -812,9 +812,31 @@
       Bridge.listen();
       return this;
     },
+    /* Свой обработчик (handler.mjs) — адрес и ключ в настройках этого браузера. */
+    handler() {
+      const h = this.settings && this.settings.handler;
+      return h && h.url ? h : null;
+    },
+    async callHandler(path, body) {
+      const h = this.handler();
+      let r;
+      try {
+        r = await fetch(`${h.url.replace(/\/+$/, '')}${path}`, {
+          method: body ? 'POST' : 'GET',
+          headers: { 'Content-Type': 'application/json', 'X-Kad-Key': h.key || '' },
+          body: body ? JSON.stringify(body) : undefined
+        });
+      } catch (_) {
+        throw new Error('обработчик недоступен — проверьте его адрес в «Моих спорах»');
+      }
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || `обработчик ответил ${r.status}`);
+      return data;
+    },
     async card(url) {
       const m = url.match(KAD_URL);
       if (!m) throw new Error('нужна ссылка вида https://kad.arbitr.ru/Card/…');
+      if (this.handler()) return this.callHandler('/card', { url: `https://kad.arbitr.ru/Card/${m[1]}` });
       await needBridge(`${KAD_ORIGIN}/Card/${m[1]}`);
       const r = await Bridge.call('card', { caseId: m[1] });
       const items = r.items || [];
@@ -826,11 +848,14 @@
       }, `https://kad.arbitr.ru/Card/${m[1]}`);
     },
     async pdf(url) {
+      if (this.handler()) return (await this.callHandler('/pdf', { url })).text;
       if (!Bridge.ready) throw new Error('нет связи с вкладкой kad.arbitr');
       const path = url.replace(/^https?:\/\/(?:www\.)?kad\.arbitr\.ru/i, '');
       const buf = await Bridge.call('pdf', { url: path });
       return globalThis.KadPdf.text(await pdfLib(), new Uint8Array(buf));
     },
+    /* Загружать можно: есть обработчик или связь с вкладкой картотеки. */
+    ready() { return !!this.handler() || Bridge.ready; },
     list() { return this.tracker.list(); },
     async get(id) {
       const st = await this.tracker.load(id);
@@ -847,7 +872,10 @@
     async setSettings(patch) { this.settings = await this.tracker.settings(patch); return this.settings; },
     note() {
       const h = this.settings && this.settings.checkHours;
-      return h ? `карточки проверяются каждые ${h} ч, пока открыты этот сайт и вкладка kad.arbitr с закладкой` : 'плановая проверка выключена';
+      if (!h) return 'плановая проверка выключена';
+      return this.handler()
+        ? `карточки проверяются каждые ${h} ч, пока открыт этот сайт`
+        : `карточки проверяются каждые ${h} ч, пока открыты этот сайт и вкладка kad.arbitr с закладкой`;
     }
   };
 
@@ -870,9 +898,11 @@
   function bridgeChanged() {
     const on = Bridge.ready;
     Bridge.shown = on;
-    document.body.classList.toggle('linked', on);
-    $('kadState').textContent = on ? 'kad.arbitr: связь есть' : 'kad.arbitr: нет связи';
-    $('kadState').classList.toggle('on', on);
+    const viaHandler = !!(backend && backend.kind === 'local' && backend.handler());
+    document.body.classList.toggle('handler', viaHandler);
+    document.body.classList.toggle('linked', on || viaHandler);
+    $('kadState').textContent = viaHandler ? 'kad.arbitr: через обработчик' : on ? 'kad.arbitr: связь есть' : 'kad.arbitr: нет связи';
+    $('kadState').classList.toggle('on', on || viaHandler);
   }
 
   /* Новые документы: уведомление браузера (если разрешено) и число в заголовке вкладки. */
@@ -895,13 +925,13 @@
   /* Плановая проверка — пока открыт сайт и есть связь с вкладкой картотеки. */
   let planned = false;
   async function plannedCheck() {
-    if (planned || !backend || backend.kind !== 'local' || !Bridge.ready) return;
+    if (planned || !backend || backend.kind !== 'local' || !backend.ready()) return;
     const h = backend.settings && backend.settings.checkHours;
     if (!h) return;
     planned = true;
     try {
       for (const it of await backend.list()) {
-        if (!Bridge.ready) break;
+        if (!backend.ready()) break;
         const at = it.checkedAt ? Date.parse(it.checkedAt) : 0;
         if (Date.now() - at < h * 3600000) continue;
         try { await backend.refresh(it.id); } catch (_) { /* ошибка записана в спор */ }
@@ -1227,6 +1257,10 @@
     $('setHours').value = String(st.checkHours || 0);
     $('setNotify').checked = !!st.notify;
     $('setPdf').checked = !!st.pdfTexts;
+    if (backend.kind === 'local') {
+      $('setHandler').value = (st.handler && st.handler.url) || '';
+      $('setHandlerKey').value = (st.handler && st.handler.key) || '';
+    }
   }
   async function saveSettings(patch) {
     await backend.setSettings(patch);
@@ -1241,6 +1275,28 @@
     saveSettings({ notify: e.target.checked });
   });
   $('setPdf').addEventListener('change', (e) => saveSettings({ pdfTexts: e.target.checked }));
+
+  /*
+   * Свой обработчик: адрес и ключ. Сохраняются в этом браузере; проверка —
+   * запросом /ping, без обращения к картотеке.
+   */
+  async function setHandler(url, key) {
+    url = String(url || '').trim().replace(/\/+$/, '');
+    if (url && !/^https?:\/\//i.test(url)) { toast('Адрес обработчика — вида https://…'); return false; }
+    await saveSettings({ handler: url ? { url, key: String(key || '').trim() } : null });
+    bridgeChanged();
+    if (!url) { $('handlerState').textContent = 'не задан — карточки загружает вкладка kad.arbitr с закладкой'; return true; }
+    $('handlerState').textContent = 'проверяю…';
+    try {
+      const r = await backend.callHandler('/ping');
+      $('handlerState').textContent = r.ok ? `работает${r.key ? '' : ' (без ключа доступа)'}` : 'ответил неожиданно';
+      return true;
+    } catch (err) {
+      $('handlerState').textContent = `не отвечает: ${err.message}`;
+      return false;
+    }
+  }
+  $('btnHandler').addEventListener('click', () => setHandler($('setHandler').value, $('setHandlerKey').value));
 
   /* ---------- прочее ---------- */
 
@@ -1268,6 +1324,12 @@
     if (!backend) return;
     if (kind === 'local') {
       $('bookmarklet').href = bookmarklet();
+      // Ссылка от администратора: …/#handler=<адрес>&key=<ключ> — один раз, потом из адреса убирается.
+      const hp = new URLSearchParams(location.hash.slice(1));
+      if (hp.get('handler')) {
+        history.replaceState(null, '', location.pathname);
+        if (await setHandler(hp.get('handler'), hp.get('key'))) toast('Обработчик подключён: карточки загружаются без вкладки kad.arbitr');
+      }
       bridgeChanged();
       setInterval(plannedCheck, 60000);
       titleCount();

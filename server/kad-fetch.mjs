@@ -100,10 +100,11 @@ export class KadFetcher {
       args: ['--disable-blink-features=AutomationControlled']
     };
     // Сначала браузер, указанный явно, затем установленные Chrome и Edge
-    // (Edge есть в любой Windows), затем Chromium из playwright.
+    // (Edge есть в любой Windows), затем полный Chromium из playwright:
+    // облегчённый Headless Shell картотека встречает проверкой «вы не робот».
     const tries = this.browserPath
       ? [{ executablePath: this.browserPath }]
-      : [{ channel: 'chrome' }, { channel: 'msedge' }, {}];
+      : [{ channel: 'chrome' }, { channel: 'msedge' }, { channel: 'chromium' }, {}];
     let lastErr = null;
     for (const t of tries) {
       try {
