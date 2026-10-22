@@ -230,6 +230,8 @@ body.waitkad #install{border-color:var(--acc);box-shadow:0 0 0 4px var(--acc-was
 .settings label{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
 .settings select{width:auto;padding:4px 8px;font-size:12.5px}
 .settings .m{margin-left:auto}
+.settings input[type=url]{width:300px;padding:4px 8px;font-size:12.5px}
+.settings input[type=password]{width:140px;padding:4px 8px;font-size:12.5px}
 .urlrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .urlrow input{flex:1 1 260px;min-width:0}
 .btn.busy{opacity:.7;cursor:progress}
@@ -332,6 +334,13 @@ a.btn{text-decoration:none;display:inline-block}
       <label title="Картотека отдаёт PDF только браузеру, прошедшему её проверку; расширение читает файл через отладчик своей вкладки — браузер на это время показывает полосу «начата отладка»"><input type="checkbox" id="setPdf"> загружать тексты определений (PDF)</label>
       <span class="m"><button class="linkbtn" id="btnExport">скачать все споры файлом</button> · <button class="linkbtn" id="btnImport">загрузить из файла</button></span>
     </div>
+    <div class="settings local">
+      <label title="Свой обработчик (handler.mjs) загружает карточки вместо вкладки kad.arbitr — см. README">Обработчик
+        <input id="setHandler" type="url" placeholder="https://… — адрес своего обработчика" autocomplete="off" spellcheck="false"></label>
+      <label>ключ <input id="setHandlerKey" type="password" autocomplete="off"></label>
+      <button class="btn btn-sm" id="btnHandler" type="button">Сохранить и проверить</button>
+      <span class="m" id="handlerState"></span>
+    </div>
     <div id="list"></div>
   </div>
 </section>
@@ -385,7 +394,8 @@ a.btn{text-decoration:none;display:inline-block}
             пока работаете: через неё загружаются карточки и тексты определений.</li>
         </ol>
         <p class="hint">Закладка берёт данные у kad.arbitr прямо в вашем браузере и передаёт их этой странице.
-        Споры хранятся <b>только в этом браузере</b> и никуда не отправляются.</p>
+        Споры хранятся <b>только в этом браузере</b> и никуда не отправляются. Если у вашей организации
+        есть свой обработчик kad.arbitr, впишите его адрес в «Моих спорах» — тогда вкладка и закладка не нужны.</p>
       </div>
       <button class="btn pri" id="btnKad" type="button">Открыть kad.arbitr</button>
     </div>
@@ -2697,6 +2707,10 @@ const opts = { credentials: 'include', headers: { 'X-Requested-With': 'XMLHttpRe
 if (referrer) opts.referrer = referrer;
 let j = null;
 let why = null;
+for (let attempt = 0; attempt < 3; attempt++) {
+j = null;
+why = null;
+let retry = false;
 try {
 const r = await fetch(url, opts);
 const body = await r.text();
@@ -2704,8 +2718,15 @@ try { j = JSON.parse(body); } catch (_) { j = null; }
 if (!(j && j.Result && j.Result.Items && j.Result.Items.length)) {
 why = { status: r.status, type: r.headers.get('content-type'), len: body.length,
 sample: j && j.Result && j.Result.Items ? 'пустой список' : body.replace(/\s+/g, ' ').slice(0, 160) };
+retry = r.status >= 500;
 }
-} catch (e) { why = { error: String((e && e.message) || e) }; }
+} catch (e) {
+why = { error: String((e && e.message) || e) };
+retry = true;
+}
+if (!retry) break;
+await new Promise((ok) => setTimeout(ok, 2000 * (attempt + 1)));
+}
 const res = j && j.Result;
 const list = (res && res.Items) || [];
 items.push(...list);
@@ -3679,9 +3700,31 @@ connect();
       Bridge.listen();
       return this;
     },
+    /* Свой обработчик (handler.mjs) — адрес и ключ в настройках этого браузера. */
+    handler() {
+      const h = this.settings && this.settings.handler;
+      return h && h.url ? h : null;
+    },
+    async callHandler(path, body) {
+      const h = this.handler();
+      let r;
+      try {
+        r = await fetch(`${h.url.replace(/\/+$/, '')}${path}`, {
+          method: body ? 'POST' : 'GET',
+          headers: { 'Content-Type': 'application/json', 'X-Kad-Key': h.key || '' },
+          body: body ? JSON.stringify(body) : undefined
+        });
+      } catch (_) {
+        throw new Error('обработчик недоступен — проверьте его адрес в «Моих спорах»');
+      }
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || `обработчик ответил ${r.status}`);
+      return data;
+    },
     async card(url) {
       const m = url.match(KAD_URL);
       if (!m) throw new Error('нужна ссылка вида https://kad.arbitr.ru/Card/…');
+      if (this.handler()) return this.callHandler('/card', { url: `https://kad.arbitr.ru/Card/${m[1]}` });
       await needBridge(`${KAD_ORIGIN}/Card/${m[1]}`);
       const r = await Bridge.call('card', { caseId: m[1] });
       const items = r.items || [];
@@ -3693,11 +3736,14 @@ connect();
       }, `https://kad.arbitr.ru/Card/${m[1]}`);
     },
     async pdf(url) {
+      if (this.handler()) return (await this.callHandler('/pdf', { url })).text;
       if (!Bridge.ready) throw new Error('нет связи с вкладкой kad.arbitr');
       const path = url.replace(/^https?:\/\/(?:www\.)?kad\.arbitr\.ru/i, '');
       const buf = await Bridge.call('pdf', { url: path });
       return globalThis.KadPdf.text(await pdfLib(), new Uint8Array(buf));
     },
+    /* Загружать можно: есть обработчик или связь с вкладкой картотеки. */
+    ready() { return !!this.handler() || Bridge.ready; },
     list() { return this.tracker.list(); },
     async get(id) {
       const st = await this.tracker.load(id);
@@ -3714,7 +3760,10 @@ connect();
     async setSettings(patch) { this.settings = await this.tracker.settings(patch); return this.settings; },
     note() {
       const h = this.settings && this.settings.checkHours;
-      return h ? `карточки проверяются каждые ${h} ч, пока открыты этот сайт и вкладка kad.arbitr с закладкой` : 'плановая проверка выключена';
+      if (!h) return 'плановая проверка выключена';
+      return this.handler()
+        ? `карточки проверяются каждые ${h} ч, пока открыт этот сайт`
+        : `карточки проверяются каждые ${h} ч, пока открыты этот сайт и вкладка kad.arbitr с закладкой`;
     }
   };
 
@@ -3737,9 +3786,11 @@ connect();
   function bridgeChanged() {
     const on = Bridge.ready;
     Bridge.shown = on;
-    document.body.classList.toggle('linked', on);
-    $('kadState').textContent = on ? 'kad.arbitr: связь есть' : 'kad.arbitr: нет связи';
-    $('kadState').classList.toggle('on', on);
+    const viaHandler = !!(backend && backend.kind === 'local' && backend.handler());
+    document.body.classList.toggle('handler', viaHandler);
+    document.body.classList.toggle('linked', on || viaHandler);
+    $('kadState').textContent = viaHandler ? 'kad.arbitr: через обработчик' : on ? 'kad.arbitr: связь есть' : 'kad.arbitr: нет связи';
+    $('kadState').classList.toggle('on', on || viaHandler);
   }
 
   /* Новые документы: уведомление браузера (если разрешено) и число в заголовке вкладки. */
@@ -3762,13 +3813,13 @@ connect();
   /* Плановая проверка — пока открыт сайт и есть связь с вкладкой картотеки. */
   let planned = false;
   async function plannedCheck() {
-    if (planned || !backend || backend.kind !== 'local' || !Bridge.ready) return;
+    if (planned || !backend || backend.kind !== 'local' || !backend.ready()) return;
     const h = backend.settings && backend.settings.checkHours;
     if (!h) return;
     planned = true;
     try {
       for (const it of await backend.list()) {
-        if (!Bridge.ready) break;
+        if (!backend.ready()) break;
         const at = it.checkedAt ? Date.parse(it.checkedAt) : 0;
         if (Date.now() - at < h * 3600000) continue;
         try { await backend.refresh(it.id); } catch (_) { /* ошибка записана в спор */ }
@@ -4094,6 +4145,10 @@ connect();
     $('setHours').value = String(st.checkHours || 0);
     $('setNotify').checked = !!st.notify;
     $('setPdf').checked = !!st.pdfTexts;
+    if (backend.kind === 'local') {
+      $('setHandler').value = (st.handler && st.handler.url) || '';
+      $('setHandlerKey').value = (st.handler && st.handler.key) || '';
+    }
   }
   async function saveSettings(patch) {
     await backend.setSettings(patch);
@@ -4108,6 +4163,28 @@ connect();
     saveSettings({ notify: e.target.checked });
   });
   $('setPdf').addEventListener('change', (e) => saveSettings({ pdfTexts: e.target.checked }));
+
+  /*
+   * Свой обработчик: адрес и ключ. Сохраняются в этом браузере; проверка —
+   * запросом /ping, без обращения к картотеке.
+   */
+  async function setHandler(url, key) {
+    url = String(url || '').trim().replace(/\/+$/, '');
+    if (url && !/^https?:\/\//i.test(url)) { toast('Адрес обработчика — вида https://…'); return false; }
+    await saveSettings({ handler: url ? { url, key: String(key || '').trim() } : null });
+    bridgeChanged();
+    if (!url) { $('handlerState').textContent = 'не задан — карточки загружает вкладка kad.arbitr с закладкой'; return true; }
+    $('handlerState').textContent = 'проверяю…';
+    try {
+      const r = await backend.callHandler('/ping');
+      $('handlerState').textContent = r.ok ? `работает${r.key ? '' : ' (без ключа доступа)'}` : 'ответил неожиданно';
+      return true;
+    } catch (err) {
+      $('handlerState').textContent = `не отвечает: ${err.message}`;
+      return false;
+    }
+  }
+  $('btnHandler').addEventListener('click', () => setHandler($('setHandler').value, $('setHandlerKey').value));
 
   /* ---------- прочее ---------- */
 
@@ -4135,6 +4212,12 @@ connect();
     if (!backend) return;
     if (kind === 'local') {
       $('bookmarklet').href = bookmarklet();
+      // Ссылка от администратора: …/#handler=<адрес>&key=<ключ> — один раз, потом из адреса убирается.
+      const hp = new URLSearchParams(location.hash.slice(1));
+      if (hp.get('handler')) {
+        history.replaceState(null, '', location.pathname);
+        if (await setHandler(hp.get('handler'), hp.get('key'))) toast('Обработчик подключён: карточки загружаются без вкладки kad.arbitr');
+      }
       bridgeChanged();
       setInterval(plannedCheck, 60000);
       titleCount();
