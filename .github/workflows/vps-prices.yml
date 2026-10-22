@@ -6,12 +6,17 @@ on:
   push:
     paths:
       - '.github/workflows/vps-prices.yml'
-      - 'tools/vps-prices.sh'
+      - 'tools/vps-prices.mjs'
 
 jobs:
   prices:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - run: bash tools/vps-prices.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npx playwright-core install chromium
+      - run: node tools/vps-prices.mjs
