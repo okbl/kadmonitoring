@@ -39,7 +39,7 @@ try {
   fs.copyFileSync(path.join(root, 'dist', 'index.html'), path.join(dir, 'index.html'));
   // pdf.js — страница загружает его, когда нужен текст определения.
   for (const f of ['pdf.min.mjs', 'pdf.worker.min.mjs']) {
-    fs.copyFileSync(path.join(root, 'node_modules', 'pdfjs-dist', 'build', f), path.join(dir, f));
+    fs.copyFileSync(path.join(root, 'node_modules', 'pdfjs-dist', 'legacy', 'build', f), path.join(dir, f));
   }
   fs.copyFileSync(path.join(root, 'node_modules', 'pdfjs-dist', 'LICENSE'), path.join(dir, 'LICENSE-pdfjs.txt'));
   // Архив расширения — его скачивают со страницы («Скачать расширение»).

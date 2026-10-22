@@ -17,7 +17,7 @@ import { assemble } from '../build.mjs';
 const [url, filed] = process.argv.slice(2);
 if (!url || !filed) { console.error('нужны ссылка на карточку и дата подачи'); process.exit(2); }
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const pdfjs = (f) => fs.readFileSync(path.join(root, 'node_modules', 'pdfjs-dist', 'build', f));
+const pdfjs = (f) => fs.readFileSync(path.join(root, 'node_modules', 'pdfjs-dist', 'legacy', 'build', f));
 
 // Сайт — как на Pages: страница и pdf.js рядом.
 const html = assemble();

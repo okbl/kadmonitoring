@@ -22,7 +22,7 @@ const html = assemble();
 const server = http.createServer((req, res) => {
   const p = new URL(req.url, 'http://x').pathname;
   if (p === '/') { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); return res.end(html); }
-  if (p === '/pdf.min.mjs' || p === '/pdf.worker.min.mjs') { res.writeHead(200, { 'Content-Type': 'text/javascript' }); return res.end(fs.readFileSync(path.join(root, 'node_modules/pdfjs-dist/build', p.slice(1)))); }
+  if (p === '/pdf.min.mjs' || p === '/pdf.worker.min.mjs') { res.writeHead(200, { 'Content-Type': 'text/javascript' }); return res.end(fs.readFileSync(path.join(root, 'node_modules/pdfjs-dist/legacy/build', p.slice(1)))); }
   res.writeHead(404); res.end();
 });
 await new Promise((ok) => server.listen(+(process.env.SITE_PORT || 0), '127.0.0.1', ok));

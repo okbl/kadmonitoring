@@ -163,7 +163,7 @@ export function startMock({ pdf, wall = false, cardCheck = false, site = '', api
       const file = { '/site/pdf.min.mjs': 'pdf.min.mjs', '/site/pdf.worker.min.mjs': 'pdf.worker.min.mjs' }[u.pathname];
       if (file) {
         res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8' });
-        return res.end(fs.readFileSync(new URL(`../node_modules/pdfjs-dist/build/${file}`, import.meta.url)));
+        return res.end(fs.readFileSync(new URL(`../node_modules/pdfjs-dist/legacy/build/${file}`, import.meta.url)));
       }
     }
     if (u.pathname === '/') {

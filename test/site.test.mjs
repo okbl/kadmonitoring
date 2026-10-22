@@ -87,13 +87,15 @@ test('сайт без расширения: закладка во вкладке
 
   // Спор встал на отслеживание сам; текст определения — из PDF за проверкой картотеки.
   await site.waitForFunction(() => /^#d=/.test(location.hash));
+  // У спора три определения с PDF — тексты всех трёх (pdf.js разбирает их по очереди).
+  const withText = (st) => Object.values((st && st.texts) || {}).filter((x) => /О П Р Е Д Е Л И Л/.test(x)).length;
   let s1 = null;
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i < 90; i++) {
     s1 = await site.evaluate(async (fn) => (0, eval)(fn)(), stored.toString());
-    if (s1.first && Object.values(s1.first.texts || {}).some((x) => /О П Р Е Д Е Л И Л/.test(x))) break;
+    if (withText(s1.first) >= 3) break;
     await site.waitForTimeout(500);
   }
-  assert.ok(Object.values(s1.first.texts || {}).some((x) => /О П Р Е Д Е Л И Л/.test(x)), 'текст определения из PDF за проверкой картотеки');
+  assert.equal(withText(s1.first), 3, 'тексты всех определений спора — из PDF за проверкой картотеки');
   assert.ok(mock.hits.some((h) => h.startsWith('/Document/Pdf/')), 'PDF взят за проверкой картотеки');
   assert.equal(s1.ids.length, 1);
   assert.equal(s1.first.summary.caseNo, 'А40-123456/2025');

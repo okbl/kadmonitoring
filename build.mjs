@@ -83,7 +83,11 @@ export function assemble({ external = false } = {}) {
 
 /* ---------- расширение ---------- */
 
-/* Файлы расширения, кроме страницы и значков. */
+/*
+ * Файлы расширения, кроме страницы и значков. pdf.js — сборка legacy: в
+ * обычной есть новейшие функции JavaScript (Map.getOrInsertComputed),
+ * которых нет в браузерах на рабочих компьютерах.
+ */
 const EXT_FILES = {
   'background.js': path.join(root, 'extension', 'background.js'),
   'dates.js': src('dates.js'),
@@ -95,8 +99,8 @@ const EXT_FILES = {
   'pdf-text.js': src('pdf-text.js'),
   'tracker.js': src('tracker.js'),
   'app.js': src('app.js'),
-  'pdf.min.mjs': path.join(root, 'node_modules', 'pdfjs-dist', 'build', 'pdf.min.mjs'),
-  'pdf.worker.min.mjs': path.join(root, 'node_modules', 'pdfjs-dist', 'build', 'pdf.worker.min.mjs'),
+  'pdf.min.mjs': path.join(root, 'node_modules', 'pdfjs-dist', 'legacy', 'build', 'pdf.min.mjs'),
+  'pdf.worker.min.mjs': path.join(root, 'node_modules', 'pdfjs-dist', 'legacy', 'build', 'pdf.worker.min.mjs'),
   'LICENSE-pdfjs.txt': path.join(root, 'node_modules', 'pdfjs-dist', 'LICENSE')
 };
 
