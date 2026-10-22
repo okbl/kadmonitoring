@@ -60,10 +60,11 @@ try {
   // Всплывающие сообщения сайта (ошибки загрузки текстов) — в журнал: в них даты и причины, без имён.
   await page.addInitScript(() => {
     window.__toasts = [];
-    new MutationObserver(() => {
+    const start = () => new MutationObserver(() => {
       const t = document.getElementById('toast');
       if (t && t.textContent && window.__toasts[window.__toasts.length - 1] !== t.textContent) window.__toasts.push(t.textContent);
-    }).observe(document.documentElement, { subtree: true, childList: true, characterData: true });
+    }).observe(document.body, { subtree: true, childList: true, characterData: true });
+    if (document.body) start(); else document.addEventListener('DOMContentLoaded', start);
   });
   await page.goto(site);
   await page.waitForSelector('body.local');
